@@ -31,11 +31,9 @@ static inline uint24_t get_ticks(void) {
 // Writes character directly to eZ80 debug port 0x30 (echoed to host stdout by emulator)
 static void debug_putc(char c) {
     __asm__ volatile (
-        "ld a, %0\n\t"
         "out0 (0x30), a\n\t"
         :
-        : "r" (c)
-        : "a"
+        : "a" (c)
     );
 }
 
