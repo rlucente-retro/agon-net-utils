@@ -1,0 +1,7 @@
+# AgonDev Build Objects
+obj/
+*.map
+*.noname.bin
+
+# OS Artifacts
+.DS_Store
