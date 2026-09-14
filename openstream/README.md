@@ -67,3 +67,20 @@ MOS> ping 192.168.1.50       ; Verify IP reachability to server host
 MOS> openstream 192.168.1.50 65432
 MOS> OSboot.bin              ; Boot TRS-OS (TRS-OS sends @ping over UART1 to initiate)
 ```
+
+---
+
+## Testing with Fab Agon Emulator
+
+To test `openstream` locally without physical hardware, an ESP8266 coprocessor simulator and automated integration test suite are provided under [`tools/esp8266-emulator/`](../tools/esp8266-emulator/).
+
+### Automated End-to-End Test
+
+Run the full automated test suite (boots mock server, simulator, and emulator, runs `openstream`, tests streaming `@ping` $\to$ `@pong`, and restores SD card configuration):
+
+```bash
+cd ../tools/esp8266-emulator
+./test_integration.py
+```
+
+See [`tools/esp8266-emulator/README.md`](../tools/esp8266-emulator/README.md) for full documentation on manual interactive testing and emulator configuration.
