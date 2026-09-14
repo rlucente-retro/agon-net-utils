@@ -67,6 +67,8 @@ static void wait_ms(uint24_t ms) {
 static void send_esp(const char *cmd) {
     while (*cmd) {
         mos_uputc(*cmd++);
+        // Brief pacing delay (~140 microseconds across stack loads/stores)
+        // to prevent overrun of the ESP8266 UART RX FIFO
         for (volatile int i = 0; i < 100; i++);
     }
 }
