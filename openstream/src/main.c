@@ -42,32 +42,6 @@ static void flush_uart(void) {
     while (mos_ugetc_nb() != -1);
 }
 
-static int resolve_local_host(const char *alias, char output_ip[BUFFER_SIZE]) {
-    if (strchr(alias, '.') != NULL) {
-        return 0;
-    }
-
-    FILE *file = fopen("/Mos/hosts", "r");
-    if (!file) {
-        file = fopen("/mos/hosts", "r");
-        if (!file) return 0;
-    }
-
-    char line[BUFFER_SIZE];
-    while (fgets(line, BUFFER_SIZE, file)) {
-        char ip[BUFFER_SIZE], current_alias[BUFFER_SIZE];
-        if (sscanf(line, "%s %s", ip, current_alias) == 2) {
-            if (strcmp(current_alias, alias) == 0) {
-                fclose(file);
-                strncpy(output_ip, ip, BUFFER_SIZE - 1);
-                output_ip[BUFFER_SIZE - 1] = '\0';
-                return 1;
-            }
-        }
-    }
-    fclose(file);
-    return 0;
-}
 
 // Scans UART1 for "OK" (returns 1), "ERROR"/"FAIL" (returns 0), or timeout (returns -1)
 static int wait_for_ok(uint32_t timeout_ms) {
@@ -241,17 +215,8 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    char target[BUFFER_SIZE];
     char host[BUFFER_SIZE];
-    strncpy(target, argv[1], sizeof(target) - 1);
-    target[sizeof(target) - 1] = '\0';
-
-    char resolved_ip[BUFFER_SIZE];
-    if (resolve_local_host(target, resolved_ip)) {
-        strncpy(host, resolved_ip, sizeof(host) - 1);
-    } else {
-        strncpy(host, target, sizeof(host) - 1);
-    }
+    strncpy(host, argv[1], sizeof(host) - 1);
     host[sizeof(host) - 1] = '\0';
 
     int port = atoi(argv[2]);

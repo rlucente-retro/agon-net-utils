@@ -10,7 +10,7 @@ Upon receiving the streaming prompt (`>`), `openstream` cleanly closes the MOS U
 
 * **Transparent Passthrough Mode (`CIPMODE=1`):** Switches the ESP8266 from ASCII AT command mode to raw bidirectional TCP streaming at 115,200 baud (8-N-1).
 * **Self-Healing Stream Recovery:** Automatically detects if the module is stuck in an active streaming mode (e.g., following a CPU hardware reset or previous crash). Enforces 1.0s Hayes silence guard times around `+++`, tears down dangling sockets, and returns the modem to command mode before establishing the new stream.
-* **Local Host Resolution:** Resolves hostname aliases defined in `/Mos/hosts` (or `/mos/hosts`) in addition to raw IPv4 addresses and DNS domain names.
+* **Direct IP & Domain Addressing:** Accepts raw IPv4 addresses or standard DNS domain names, leveraging the ESP8266's internal LwIP DNS resolver over Wi-Fi.
 * **Clean Handover Hygiene:** Immediately after the `>` prompt is confirmed, residual UART characters are flushed and `mos_uclose()` is called to detach the MOS interrupt handler. Zero stray characters or newlines are transmitted over UART1 upon exit.
 
 ---
@@ -49,10 +49,10 @@ Connect to a remote `TRS-NET.py` server listening on TCP port 65432:
 MOS> openstream 192.168.1.50 65432
 ```
 
-Connect using a `/Mos/hosts` alias:
+Connect using a domain name or local mDNS hostname (resolved over Wi-Fi by the ESP8266):
 
 ```text
-MOS> openstream trsbox 65432
+MOS> openstream trsbox.local 65432
 ```
 
 ---
