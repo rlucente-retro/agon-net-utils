@@ -1,6 +1,6 @@
 # openstream - Transparent TCP Streaming Utility for Agon Light 2
 
-`openstream` is a native Agon Light 2 MOS utility that configures the **Olimex MOD-WIFI-ESP8266** module (on UART1) into transparent streaming mode (`CIPMODE=1`) and connects to a remote TCP server (such as `TCP-NET.py` for TRS-OS).
+`openstream` is a native Agon Light 2 MOS utility that configures the **Olimex MOD-WIFI-ESP8266** module (on UART1) into transparent streaming mode (`CIPMODE=1`) and connects to a remote TCP server (such as a socket-enabled `TRS-NET.py` server for TRS-OS).
 
 Upon receiving the streaming prompt (`>`), `openstream` cleanly closes the MOS UART1 driver and returns to the MOS command line, leaving the transparent TCP socket active and ready for the operating system loader (`OSboot.bin`).
 
@@ -31,7 +31,7 @@ The resulting executable binary will be generated at `bin/openstream.bin`.
 
 ## Installation
 
-Copy `bin/openstream.bin` to your Agon Light 2 microSD card (typically in `/bin` or `/mos`).
+Copy `bin/openstream.bin` to the `/mos/` directory of your Agon Light 2 microSD card. Placing it in `/mos/` ensures it is co-located with `OSboot.bin` and available from any working directory across all Quark MOS versions.
 
 ---
 
@@ -43,7 +43,7 @@ openstream <host_or_ip> <port>
 
 ### Examples
 
-Connect to a TRS-NET / TCP-NET server running on the local network:
+Connect to a remote `TRS-NET.py` server listening on TCP port 65432:
 
 ```text
 MOS> openstream 192.168.1.50 65432
@@ -55,11 +55,15 @@ Connect using a `/Mos/hosts` alias:
 MOS> openstream trsbox 65432
 ```
 
-### Typical Workflow for TRS-OS
+---
+
+## Typical Workflow for TRS-OS
+
+The only existing reference server for TRS-OS remote virtual disks is `TRS-NET.py`. Note that standard `TRS-NET.py` was originally written for direct serial cable (COM port) connections and must be separately modified to accept TCP socket connections. The modified server should wait silently for client initiation (`@ping\n`) before transmitting data.
 
 ```text
-MOS> netman                  ; Ensure Wi-Fi is connected
-MOS> ping 192.168.1.50       ; Confirm server reachability
+MOS> netman                  ; Connect to Wi-Fi (if not already auto-connected)
+MOS> ping 192.168.1.50       ; Verify IP reachability to server host
 MOS> openstream 192.168.1.50 65432
-MOS> OSboot.bin              ; Boot TRS-OS (TRS-OS sends @ping to initiate)
+MOS> OSboot.bin              ; Boot TRS-OS (TRS-OS sends @ping over UART1 to initiate)
 ```

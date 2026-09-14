@@ -4,7 +4,7 @@
  * Usage: openstream <host_or_ip> <port>
  *
  * Configures the ESP8266 on UART1 into transparent transmission mode (CIPMODE=1)
- * and connects to a remote TCP server (e.g. TCP-NET.py for TRS-OS).
+ * and connects to a remote TCP server (e.g. a socket-modified TRS-NET.py for TRS-OS).
  * Upon receiving the '>' prompt, exits cleanly to MOS, leaving the transparent
  * link ready for the operating system loader (e.g. OSboot.bin).
  */
