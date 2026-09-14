@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <agon/mos.h>
 
 #define BUFFER_SIZE 128
@@ -43,12 +44,17 @@ static void debug_print(const char *s) {
     }
 }
 
-#define LOG_MSG(...) do { \
-    char _log_buf[BUFFER_SIZE]; \
-    snprintf(_log_buf, sizeof(_log_buf), __VA_ARGS__); \
-    printf("%s", _log_buf); \
-    debug_print(_log_buf); \
-} while(0)
+static void log_msg(const char *fmt, ...) {
+    char buf[BUFFER_SIZE];
+    va_list args;
+
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+
+    printf("%s", buf);
+    debug_print(buf);
+}
 
 static void wait_ms(uint24_t ms) {
     uint24_t ticks = MS_TO_TICKS(ms);
@@ -227,14 +233,14 @@ static int prepare_esp(void) {
     // 1. Probe if module is in AT command mode
     send_esp("AT\r\n");
     if (wait_for_ok(500) != 1) {
-        LOG_MSG("Notice: Module not responding. Attempting stream escape...\n");
+        log_msg("Notice: Module not responding. Attempting stream escape...\n");
         escape_stream_mode();
         send_esp("AT\r\n");
         if (wait_for_ok(1500) != 1) {
-            LOG_MSG("Error: ESP8266 module not responding on UART1 (115200 baud).\n");
+            log_msg("Error: ESP8266 module not responding on UART1 (115200 baud).\n");
             return 0;
         }
-        LOG_MSG("Notice: Recovered module to command mode.\n");
+        log_msg("Notice: Recovered module to command mode.\n");
     }
 
     // 2. Disable local character echo
@@ -250,7 +256,7 @@ static int prepare_esp(void) {
     // 4. Reset to non-transparent mode first
     send_esp("AT+CIPMODE=0\r\n");
     if (wait_for_ok(500) != 1) {
-        LOG_MSG("Error: Failed to reset CIPMODE=0.\n");
+        log_msg("Error: Failed to reset CIPMODE=0.\n");
         return 0;
     }
     flush_uart();
@@ -258,7 +264,7 @@ static int prepare_esp(void) {
     // 5. Configure single-connection mode (required for transparent streaming)
     send_esp("AT+CIPMUX=0\r\n");
     if (wait_for_ok(1000) != 1) {
-        LOG_MSG("Error: Failed to set single-connection mode (CIPMUX=0).\n");
+        log_msg("Error: Failed to set single-connection mode (CIPMUX=0).\n");
         return 0;
     }
     flush_uart();
@@ -266,7 +272,7 @@ static int prepare_esp(void) {
     // 6. Enable transparent transmission mode
     send_esp("AT+CIPMODE=1\r\n");
     if (wait_for_ok(1000) != 1) {
-        LOG_MSG("Error: Failed to enable transparent mode (CIPMODE=1).\n");
+        log_msg("Error: Failed to enable transparent mode (CIPMODE=1).\n");
         return 0;
     }
     flush_uart();
@@ -276,9 +282,9 @@ static int prepare_esp(void) {
 
 int main(int argc, char *argv[]) {
     if (argc < 3) {
-        LOG_MSG("Usage: openstream <host_or_ip> <port>\n");
-        LOG_MSG("Example: openstream 192.168.1.50 65432\n");
-        LOG_MSG("         openstream server.local 65432\n");
+        log_msg("Usage: openstream <host_or_ip> <port>\n");
+        log_msg("Example: openstream 192.168.1.50 65432\n");
+        log_msg("         openstream server.local 65432\n");
         return 1;
     }
 
@@ -288,7 +294,7 @@ int main(int argc, char *argv[]) {
 
     int port = atoi(argv[2]);
     if (port <= 0 || port > 65535) {
-        LOG_MSG("Error: Invalid port '%s' (must be 1-65535).\n", argv[2]);
+        log_msg("Error: Invalid port '%s' (must be 1-65535).\n", argv[2]);
         return 1;
     }
 
@@ -303,7 +309,7 @@ int main(int argc, char *argv[]) {
     settings.eir = 0;
 
     if (mos_uopen(&settings) != 0) {
-        LOG_MSG("Error: Failed to open UART1 (interface locked).\n");
+        log_msg("Error: Failed to open UART1 (interface locked).\n");
         return 1;
     }
 
@@ -315,12 +321,12 @@ int main(int argc, char *argv[]) {
 
     char cmd[BUFFER_SIZE];
     snprintf(cmd, sizeof(cmd), "AT+CIPSTART=\"TCP\",\"%s\",%d\r\n", host, port);
-    LOG_MSG("Connecting to %s:%d...\n", host, port);
+    log_msg("Connecting to %s:%d...\n", host, port);
     send_esp(cmd);
 
     int conn_res = wait_for_connect(10000);
     if (conn_res <= 0) {
-        LOG_MSG("Error: Connection to %s:%d failed.\n", host, port);
+        log_msg("Error: Connection to %s:%d failed.\n", host, port);
         send_esp("AT+CIPCLOSE\r\n");
         wait_for_ok(500);
         send_esp("AT+CIPMODE=0\r\n");
@@ -335,7 +341,7 @@ int main(int argc, char *argv[]) {
     // Enter transparent transmission mode
     send_esp("AT+CIPSEND\r\n");
     if (wait_for_prompt(3000) != 1) {
-        LOG_MSG("Error: Failed to enter transparent streaming mode (no '>' prompt).\n");
+        log_msg("Error: Failed to enter transparent streaming mode (no '>' prompt).\n");
         escape_stream_mode();
         send_esp("AT+CIPCLOSE\r\n");
         wait_for_ok(500);
@@ -353,7 +359,7 @@ int main(int argc, char *argv[]) {
     // Detach MOS interrupt handler from UART1 so MOS does not capture stream data
     mos_uclose();
 
-    LOG_MSG("Streaming mode active on UART1 (115200 8-N-1).\n");
-    LOG_MSG("Link established. Ready for TRS-OS.\n");
+    log_msg("Streaming mode active on UART1 (115200 8-N-1).\n");
+    log_msg("Link established. Ready for TRS-OS.\n");
     return 0;
 }
