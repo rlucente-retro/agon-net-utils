@@ -46,13 +46,13 @@ openstream <host_or_ip> <port>
 Connect to a remote `TRS-NET.py` server listening on TCP port 65432:
 
 ```text
-MOS> openstream 192.168.1.50 65432
+openstream 192.168.1.50 65432
 ```
 
 Connect using a domain name or local mDNS hostname (resolved over Wi-Fi by the ESP8266):
 
 ```text
-MOS> openstream trsbox.local 65432
+openstream trsbox.local 65432
 ```
 
 ---
@@ -62,10 +62,10 @@ MOS> openstream trsbox.local 65432
 The only existing reference server for TRS-OS remote virtual disks is `TRS-NET.py`. Note that standard `TRS-NET.py` was originally written for direct serial cable (COM port) connections and must be separately modified to accept TCP socket connections. The modified server should wait silently for client initiation (`@ping\n`) before transmitting data.
 
 ```text
-MOS> netman                  ; Connect to Wi-Fi (if not already auto-connected)
-MOS> ping 192.168.1.50       ; Verify IP reachability to server host
-MOS> openstream 192.168.1.50 65432
-MOS> OSboot.bin              ; Boot TRS-OS (TRS-OS sends @ping over UART1 to initiate)
+netman                  ; Connect to Wi-Fi (if not already auto-connected)
+ping 192.168.1.50       ; Verify IP reachability to server host
+openstream 192.168.1.50 65432
+OSboot.bin              ; Boot TRS-OS (TRS-OS sends @ping over UART1 to initiate)
 ```
 
 ---

@@ -147,16 +147,16 @@ cd /Users/richardlucente/development/git/agon-net-utils/tools/esp8266-emulator
 
 This starts `esp8266_sim.py` in verbose mode and automatically launches `fab-agon-emulator` linked to the allocated PTY with `--uart1-baud 0`.
 
-### Step 4: Run `openstream` from MOS Prompt
+### Step 4: Run `openstream`
 
-In the emulator window at the MOS prompt:
+In the emulator window:
 
 ```text
-MOS> openstream 127.0.0.1 65432
+openstream 127.0.0.1 65432
 ```
 
 > [!NOTE]
-> If testing via `autoexec.txt` instead of typing at the interactive prompt, MOS does not perform dynamic star-command resolution for binaries in subdirectories. In `autoexec.txt`, use explicit load syntax:
+> If testing via `autoexec.txt` instead of typing interactively, MOS does not perform dynamic star-command resolution for binaries in subdirectories. In `autoexec.txt`, use explicit load syntax:
 > ```text
 > LOAD mos/openstream.bin
 > RUN . 127.0.0.1 65432
@@ -169,7 +169,6 @@ In the **Emulator Window**:
 Connecting to 127.0.0.1:65432...
 Streaming mode active on UART1 (115200 8-N-1).
 Link established. Ready for TRS-OS.
-MOS> 
 ```
 
 In the **Simulator Terminal (Terminal 2)**:
