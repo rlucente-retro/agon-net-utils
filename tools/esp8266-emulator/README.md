@@ -17,7 +17,7 @@ This toolkit provides a complete virtual ESP8266 network coprocessor environment
 
 | File | Role | Description |
 | :--- | :--- | :--- |
-| [`test_integration.py`](test_integration.py) | **Automated Test Runner** | All-in-one test script that boots `mock_server.py`, `esp8266_sim.py`, and `fab-agon-emulator`, verifies AT negotiation and TCP streaming, tests bidirectional payloads (`@ping` $\to$ `@pong`), and restores SD card configuration. |
+| [`test_integration.py`](test_integration.py) | **Automated Test Runner** | All-in-one test script that boots `mock_server.py`, `esp8266_sim.py`, and `fab-agon-emulator`, verifies AT negotiation and TCP streaming, tests bidirectional payloads (`@ping` -> `@pong`), and restores SD card configuration. |
 | [`esp8266_sim.py`](esp8266_sim.py) | **Coprocessor Simulator** | Creates a virtual serial PTY, implements the Espressif ESP-AT v1.7.x firmware command set, manages transparent streaming mode (`CIPMODE=1`), proxies raw data over real TCP sockets, and detects Hayes `+++` escape sequences. |
 | [`mock_server.py`](mock_server.py) | **Test TCP Server** | Lightweight test server that listens on port 65432, remaining completely silent until the client sends `@ping\n`, and responds with `@pong\n`. |
 | [`run_emulator.sh`](run_emulator.sh) | **Interactive Launcher** | Starts `esp8266_sim.py` and automatically launches `fab-agon-emulator` linked to the simulated PTY. |

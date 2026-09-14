@@ -76,7 +76,7 @@ To test `openstream` locally without physical hardware, an ESP8266 coprocessor s
 
 ### Automated End-to-End Test
 
-Run the full automated test suite (boots mock server, simulator, and emulator, runs `openstream`, tests streaming `@ping` $\to$ `@pong`, and restores SD card configuration):
+Run the full automated test suite (boots mock server, simulator, and emulator, runs `openstream`, tests streaming `@ping` -> `@pong`, and restores SD card configuration):
 
 ```bash
 cd ../tools/esp8266-emulator

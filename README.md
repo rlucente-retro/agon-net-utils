@@ -43,7 +43,7 @@ This automated runner:
 3. Launches `fab-agon-emulator` linked to the PTY.
 4. Executes `openstream` inside MOS and validates the complete AT command handshake (`AT`, `ATE0`, `CIPMUX`, `CIPMODE=1`, `CIPSTART`, `CIPSEND`).
 5. Establishes a transparent TCP connection to the mock server.
-6. Tests bidirectional payload transmission (`@ping` $\to$ `@pong`).
+6. Tests bidirectional payload transmission (`@ping` -> `@pong`).
 7. Shuts down cleanly and restores the emulator's SD card configuration.
 
 See [`tools/esp8266-emulator/README.md`](tools/esp8266-emulator/README.md) for full documentation on manual interactive testing and emulator configuration.
