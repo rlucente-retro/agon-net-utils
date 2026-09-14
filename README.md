@@ -4,9 +4,10 @@ Network utilities for the **Olimex Agon Light 2** (Zilog eZ80F92) running Quark 
 
 ## Utilities
 
-| Directory | Binary | Description |
+| Directory | Binary / Script | Description |
 | :--- | :--- | :--- |
 | [`openstream/`](openstream/) | `openstream.bin` | Connects to a remote TCP host and puts the ESP8266 into transparent streaming mode (`CIPMODE=1`), preserving the link for subsequent OS bootloaders (e.g. `OSboot.bin` for TRS-OS). |
+| [`tools/esp8266-emulator/`](tools/esp8266-emulator/) | `esp8266_sim.py` | Virtual serial PTY coprocessor simulator for testing network tools in `fab-agon-emulator` without physical hardware. |
 
 ## Building
 
