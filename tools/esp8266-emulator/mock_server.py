@@ -17,35 +17,35 @@ def run_server(port=65432, host="0.0.0.0"):
     server.bind((host, port))
     server.listen(1)
 
-    print(f"[*] Mock TCP server listening on {host}:{port}")
-    print(f"[*] Waiting for client connection (e.g. from openstream / TRS-OS)...")
+    print(f"[*] Mock TCP server listening on {host}:{port}", flush=True)
+    print(f"[*] Waiting for client connection (e.g. from openstream / TRS-OS)...", flush=True)
 
     try:
         while True:
             conn, addr = server.accept()
-            print(f"[+] Client connected from {addr[0]}:{addr[1]}")
-            print(f"[*] Silent mode: Waiting for client '@ping'...")
+            print(f"[+] Client connected from {addr[0]}:{addr[1]}", flush=True)
+            print(f"[*] Silent mode: Waiting for client '@ping'...", flush=True)
 
             buffer = bytearray()
             while True:
                 data = conn.recv(1024)
                 if not data:
-                    print(f"[-] Client {addr[0]}:{addr[1]} disconnected.")
+                    print(f"[-] Client {addr[0]}:{addr[1]} disconnected.", flush=True)
                     break
 
                 buffer.extend(data)
-                print(f"[RX] Received {len(data)} bytes: {data!r}")
+                print(f"[RX] Received {len(data)} bytes: {data!r}", flush=True)
 
                 # Check for TRS-OS @ping initiation
                 if b"@ping" in buffer:
-                    print(f"[TX] Replying with '@pong\\n'...")
+                    print(f"[TX] Replying with '@pong\\n'...", flush=True)
                     conn.sendall(b"@pong\n")
                     # Clear processed ping
                     idx = buffer.find(b"@ping")
                     buffer = buffer[idx + 5:]
 
     except KeyboardInterrupt:
-        print("\nShutting down server.")
+        print("\nShutting down server.", flush=True)
     finally:
         server.close()
 

@@ -49,6 +49,7 @@ class ESP8266Simulator:
 
         # Command buffer
         self.cmd_buffer = bytearray()
+        self.last_was_cr = False
 
         # Escape sequence detector for transparent mode
         self.last_char_time = 0.0
@@ -284,15 +285,33 @@ class ESP8266Simulator:
             for b in data:
                 if self.echo:
                     self.write_pty(bytes([b]))
-                if b in (ord('\r'), ord('\n')):
+                if b == ord('\r'):
+                    self.last_was_cr = True
+                    if self.cmd_buffer:
+                        self.handle_command(self.cmd_buffer)
+                        self.cmd_buffer.clear()
+                elif b == ord('\n'):
+                    if self.last_was_cr:
+                        self.last_was_cr = False
+                        continue
+                    self.last_was_cr = False
                     if self.cmd_buffer:
                         self.handle_command(self.cmd_buffer)
                         self.cmd_buffer.clear()
                 else:
+                    self.last_was_cr = False
                     self.cmd_buffer.append(b)
             return
 
         # MODE_STREAM: Transparent passthrough with Hayes +++ detection
+        # Consume any trailing newline from the command that entered stream mode
+        if self.last_was_cr and len(data) > 0 and data[0] == ord('\n'):
+            self.last_was_cr = False
+            data = data[1:]
+            if not data:
+                return
+        self.last_was_cr = False
+
         # Hayes requirements:
         # 1. >= 1.0s silence before +++
         # 2. Exactly +++ with no other chars
@@ -422,9 +441,12 @@ def main():
     sim = ESP8266Simulator(symlink=args.symlink, verbose=args.verbose, simulated_ip=args.ip)
 
     if args.launch:
-        cmd = [args.launch, "--uart1-device", sim.slave_name, "--uart1-baud", "115200"]
-        print(f"Launching emulator: {' '.join(cmd)}")
-        emu_proc = subprocess.Popen(cmd)
+        # Note: on macOS, virtual PTYs fail with ENOTTY (Not a typewriter) if baud > 0
+        # Passing 0 causes fab-agon-emulator's serialport to skip IOSSIOSPEED and succeed.
+        cmd = [args.launch, "--uart1-device", sim.slave_name, "--uart1-baud", "0"]
+        emu_cwd = os.path.dirname(os.path.abspath(args.launch))
+        print(f"Launching emulator: {' '.join(cmd)} (cwd: {emu_cwd})")
+        emu_proc = subprocess.Popen(cmd, cwd=emu_cwd)
 
         def sig_handler(sig, frame):
             emu_proc.terminate()
