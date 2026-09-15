@@ -13,19 +13,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-static void usage(void) {
+static int usage(void) {
     log_msg("Usage: closestream\n"
             "Closes active transparent stream on UART1 and returns ESP8266 to command mode.\n");
+    return 1;
 }
 
 int main(int argc, char *argv[]) {
     if (argc > 1) {
-        if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "/?") == 0) {
-            usage();
-            return 0;
-        }
-        usage();
-        return 1;
+        return usage();
     }
 
     if (!init_uart1()) {
