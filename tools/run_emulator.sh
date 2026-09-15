@@ -35,4 +35,17 @@ fi
 echo "Using emulator binary: $EMU_BIN"
 echo "Starting ESP8266 simulator and bridging to UART1..."
 
-exec python3 "$SCRIPT_DIR/esp8266_sim.py" --verbose --launch "$EMU_BIN"
+# Resolve Python interpreter (prefer virtual environment if present)
+if [ -n "$VIRTUAL_ENV" ] && [ -x "$VIRTUAL_ENV/bin/python3" ]; then
+    PYTHON_BIN="$VIRTUAL_ENV/bin/python3"
+elif [ -x "$REPO_ROOT/.venv/bin/python3" ]; then
+    PYTHON_BIN="$REPO_ROOT/.venv/bin/python3"
+elif [ -x "$SCRIPT_DIR/.venv/bin/python3" ]; then
+    PYTHON_BIN="$SCRIPT_DIR/.venv/bin/python3"
+elif which python3 >/dev/null 2>&1; then
+    PYTHON_BIN="$(which python3)"
+else
+    PYTHON_BIN="python"
+fi
+
+exec "$PYTHON_BIN" "$SCRIPT_DIR/esp8266_sim.py" --verbose --launch "$EMU_BIN"

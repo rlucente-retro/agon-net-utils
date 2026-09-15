@@ -7,11 +7,15 @@ obj/
 *.o
 *.a
 
-# Python Cache & Bytecode
+# Python Cache, Bytecode & Virtual Environments
 __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+.venv/
+venv/
+env/
+ENV/
 
 # Test & Temporary Artifacts
 *.bak

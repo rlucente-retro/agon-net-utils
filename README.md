@@ -123,11 +123,30 @@ RUN
 
 A complete simulation environment and automated test suite for [Fab Agon Emulator](https://github.com/tomm/fab-agon-emulator) is provided under [`tools/`](tools/).
 
+### Virtual Environment Setup
+
+Create and activate a Python virtual environment for the test tools:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+Alternatively, use the Makefile target:
+
+```bash
+make venv
+source .venv/bin/activate
+```
+
+### Running Tests
+
 To verify the full network pipeline locally without physical hardware:
 
 ```bash
-cd tools
-./test_integration.py
+make test
+# or
+cd tools && ./test_integration.py
 ```
 
 By default, the tools check for `fab-agon-emulator` in your system `PATH`, via the `FAB_AGON_EMULATOR` environment variable, or at the relative path `../fab-agon-emulator-*/fab-agon-emulator`. You can explicitly provide a custom emulator path with:

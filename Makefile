@@ -25,6 +25,9 @@ SRCDIR = src
 OBJDIR = obj
 BINDIR = bin
 
+VENV ?= .venv
+PYTHON ?= $(shell if [ -n "$$VIRTUAL_ENV" ] && [ -x "$$VIRTUAL_ENV/bin/python3" ]; then echo "$$VIRTUAL_ENV/bin/python3"; elif [ -x $(VENV)/bin/python3 ]; then echo $(VENV)/bin/python3; else echo python3; fi)
+
 PROGRAMS = openstream closestream
 BINARIES = $(patsubst %, $(BINDIR)/%.bin, $(PROGRAMS))
 
@@ -59,5 +62,12 @@ $(OBJDIR):
 clean:
 	@$(RM) -r $(BINDIR) $(OBJDIR)
 
+venv:
+	python3 -m venv $(VENV)
+
+test: all
+	$(PYTHON) tools/test_integration.py
+
 .PRECIOUS: $(OBJDIR)/%.o $(BINDIR)/%.noname.bin
-.PHONY: all clean openstream closestream
+.PHONY: all clean openstream closestream venv test
+

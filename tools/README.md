@@ -77,9 +77,20 @@ An end-to-end automated test runner is provided in [`test_integration.py`](test_
 
 ### Running the Automated Test
 
+From the repository root, initialize and activate the virtual environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+Then execute the test suite:
+
 ```bash
 cd tools
 ./test_integration.py
+# Or from the repository root:
+# make test
 ```
 
 #### Emulator Resolution & User Overrides
