@@ -6,46 +6,70 @@ Emulates the Espressif ESP-AT v1.7.x firmware running on an Olimex MOD-WIFI-ESP8
 module connected to UART1 of the Olimex Agon Light 2.
 
 Creates a virtual serial pseudo-terminal (PTY) that can be linked to:
-    fab-agon-emulator --uart1-device <pty_path> --uart1-baud 115200
+    fab-agon-emulator --uart1-device <pty_path> --uart1-baud 0
 
 Features:
 - Full AT command parser for standard Agon network utilities (netman, ping, openstream).
 - Handles transparent streaming mode (AT+CIPMODE=1 & AT+CIPSEND -> '>').
 - Bridges transparent UART1 stream directly to remote TCP server (e.g. TRS-NET.py).
-- Implements strict Hayes '+++' escape sequence detection with 1.0s guard times.
+- Implements strict Hayes '+++' escape sequence detection with guard times.
 - Detects socket disconnects and returns cleanly to command mode.
 """
 
-import sys
+from __future__ import annotations
+
+import argparse
+import contextlib
+import enum
 import os
+from pathlib import Path
 import pty
-import tty
-import termios
 import select
 import socket
-import time
-import argparse
 import subprocess
-import signal
+import sys
+import time
+from typing import Final
+import tty
 
-MODE_COMMAND = 0
-MODE_STREAM = 1
+
+class OperatingMode(enum.IntEnum):
+    COMMAND = 0
+    STREAM = 1
+
+
+# Backwards compatibility aliases
+MODE_COMMAND: Final[OperatingMode] = OperatingMode.COMMAND
+MODE_STREAM: Final[OperatingMode] = OperatingMode.STREAM
+
+DEFAULT_SYMLINK: Final[Path] = Path("/tmp/agon-uart1")
+DEFAULT_IP: Final[str] = "192.168.1.100"
+GUARD_TIME: Final[float] = 0.9
+INTER_CHAR_TIMEOUT: Final[float] = 1.0
+
 
 class ESP8266Simulator:
-    def __init__(self, symlink=None, verbose=False, simulated_ip="192.168.1.100"):
+    """Simulates an ESP8266 running ESP-AT firmware over a Unix pseudo-terminal (PTY)."""
+
+    def __init__(
+        self,
+        symlink: str | Path | None = None,
+        verbose: bool = False,
+        simulated_ip: str = DEFAULT_IP,
+    ) -> None:
         self.verbose = verbose
         self.simulated_ip = simulated_ip
-        self.symlink = symlink
-        self.mode = MODE_COMMAND
+        self.symlink = Path(symlink) if symlink else None
+        self.mode = OperatingMode.COMMAND
 
         # AT State
         self.echo = True
         self.cwmode = 1           # Station mode
         self.cipmux = 0           # Single connection mode
         self.cipmode = 0          # 0 = Normal mode, 1 = Transparent streaming
-        self.tcp_sock = None
-        self.tcp_host = None
-        self.tcp_port = None
+        self.tcp_sock: socket.socket | None = None
+        self.tcp_host: str | None = None
+        self.tcp_port: int | None = None
 
         # Command buffer
         self.cmd_buffer = bytearray()
@@ -58,6 +82,8 @@ class ESP8266Simulator:
         self.escape_candidate_time = 0.0
 
         # Create PTY
+        self.master_fd: int | None
+        self.slave_fd: int | None
         self.master_fd, self.slave_fd = pty.openpty()
         self.slave_name = os.ttyname(self.slave_fd)
 
@@ -67,28 +93,50 @@ class ESP8266Simulator:
 
         # Create symlink if requested
         if self.symlink:
+            with contextlib.suppress(OSError):
+                self.symlink.unlink(missing_ok=True)
             try:
-                if os.path.islink(self.symlink) or os.path.exists(self.symlink):
-                    os.unlink(self.symlink)
-                os.symlink(self.slave_name, self.symlink)
-            except Exception as e:
-                print(f"[!] Warning: Could not create symlink {self.symlink}: {e}")
+                self.symlink.symlink_to(self.slave_name)
+            except OSError as e:
+                print(f"[!] Warning: Could not create symlink {self.symlink}: {e}", file=sys.stderr)
 
-    def log(self, msg):
+    def __enter__(self) -> ESP8266Simulator:
+        return self
+
+    def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: object) -> None:
+        self.close()
+
+    def close(self) -> None:
+        """Close sockets, file descriptors, and clean up symlinks."""
+        self.close_socket()
+        if self.master_fd is not None:
+            with contextlib.suppress(OSError):
+                os.close(self.master_fd)
+            self.master_fd = None
+        if self.slave_fd is not None:
+            with contextlib.suppress(OSError):
+                os.close(self.slave_fd)
+            self.slave_fd = None
+        if self.symlink:
+            with contextlib.suppress(OSError):
+                self.symlink.unlink(missing_ok=True)
+
+    def log(self, msg: str) -> None:
         if self.verbose:
             print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
-    def write_pty(self, data: bytes):
+    def write_pty(self, data: bytes) -> None:
+        if self.master_fd is None:
+            return
         try:
             os.write(self.master_fd, data)
         except OSError as e:
             self.log(f"PTY write error: {e}")
 
-    def send_response(self, text: str):
-        data = text.encode("ascii", errors="replace")
-        self.write_pty(data)
+    def send_response(self, text: str) -> None:
+        self.write_pty(text.encode("ascii", errors="replace"))
 
-    def handle_command(self, cmd_bytes: bytes):
+    def handle_command(self, cmd_bytes: bytes) -> None:
         cmd = cmd_bytes.decode("ascii", errors="replace").strip()
         if not cmd:
             return
@@ -118,24 +166,21 @@ class ESP8266Simulator:
 
         elif u_cmd.startswith("AT+RST"):
             self.close_socket()
-            self.mode = MODE_COMMAND
+            self.mode = OperatingMode.COMMAND
             self.cipmode = 0
             self.send_response("\r\nOK\r\nready\r\n")
 
         elif u_cmd.startswith("AT+CWMODE"):
-            # e.g. AT+CWMODE=1 or AT+CWMODE_DEF=1 or AT+CWMODE?
             if "?" in u_cmd:
                 self.send_response(f"\r\n+CWMODE:{self.cwmode}\r\n\r\nOK\r\n")
             else:
                 try:
-                    val = int(cmd.split("=")[1].strip())
-                    self.cwmode = val
+                    self.cwmode = int(cmd.partition("=")[2].strip())
                     self.send_response("\r\nOK\r\n")
-                except Exception:
+                except ValueError:
                     self.send_response("\r\nERROR\r\n")
 
         elif u_cmd.startswith("AT+CWJAP"):
-            # e.g. AT+CWJAP_DEF="SSID","PASS" or AT+CWJAP?
             if "?" in u_cmd:
                 self.send_response('\r\n+CWJAP:"SimulatedAP","xx:xx:xx:xx:xx:xx",1,-50\r\n\r\nOK\r\n')
             else:
@@ -145,7 +190,6 @@ class ESP8266Simulator:
             self.send_response("\r\nOK\r\n")
 
         elif u_cmd.startswith("AT+CIPSTA?") or u_cmd.startswith("AT+CIPSTA_") or u_cmd == "AT+CIPSTA":
-            # Query IP address
             resp = (
                 f'\r\n+CIPSTA_CUR:ip:"{self.simulated_ip}"\r\n'
                 f'+CIPSTA_CUR:gateway:"192.168.1.1"\r\n'
@@ -156,46 +200,41 @@ class ESP8266Simulator:
         elif u_cmd.startswith("AT+CIPMUX"):
             if "?" in u_cmd:
                 self.send_response(f"\r\n+CIPMUX:{self.cipmux}\r\n\r\nOK\r\n")
+            elif self.tcp_sock:
+                self.send_response("\r\nlink is builded\r\n\r\nERROR\r\n")
             else:
-                if self.tcp_sock:
-                    self.send_response("\r\nlink is builded\r\n\r\nERROR\r\n")
-                else:
-                    try:
-                        val = int(cmd.split("=")[1].strip())
-                        self.cipmux = val
-                        self.send_response("\r\nOK\r\n")
-                    except Exception:
-                        self.send_response("\r\nERROR\r\n")
+                try:
+                    self.cipmux = int(cmd.partition("=")[2].strip())
+                    self.send_response("\r\nOK\r\n")
+                except ValueError:
+                    self.send_response("\r\nERROR\r\n")
 
         elif u_cmd.startswith("AT+CIPMODE"):
             if "?" in u_cmd:
                 self.send_response(f"\r\n+CIPMODE:{self.cipmode}\r\n\r\nOK\r\n")
             else:
                 try:
-                    val = int(cmd.split("=")[1].strip())
-                    self.cipmode = val
+                    self.cipmode = int(cmd.partition("=")[2].strip())
                     self.send_response("\r\nOK\r\n")
-                except Exception:
+                except ValueError:
                     self.send_response("\r\nERROR\r\n")
 
         elif u_cmd.startswith("AT+CIPSTART="):
-            # e.g. AT+CIPSTART="TCP","192.168.1.50",65432
             self.handle_cipstart(cmd)
 
         elif u_cmd.startswith("AT+CIPSEND"):
             if self.cipmode == 1:
                 if self.tcp_sock:
                     self.log("Entering transparent streaming mode...")
-                    self.mode = MODE_STREAM
+                    self.mode = OperatingMode.STREAM
                     self.escape_buf.clear()
                     self.escape_candidate = False
                     self.last_char_time = time.time()
-                    # Official ESP-AT response: \r\nOK\r\n\r\n> 
+                    # Official ESP-AT response: \r\nOK\r\n\r\n>
                     self.send_response("\r\nOK\r\n\r\n> ")
                 else:
                     self.send_response("\r\nERROR\r\n")
             else:
-                # Normal packet send not fully modeled (returns OK for simple len)
                 self.send_response("\r\nOK\r\n> ")
 
         elif u_cmd.startswith("AT+CIPCLOSE"):
@@ -206,43 +245,41 @@ class ESP8266Simulator:
                 self.send_response("\r\nERROR\r\n")
 
         elif u_cmd.startswith("AT+PING="):
-            # e.g. AT+PING="192.168.1.50"
-            host = cmd.split("=")[1].strip().strip('"')
+            host = cmd.partition("=")[2].strip().strip('"')
             try:
                 t0 = time.time()
-                addr = socket.gethostbyname(host)
+                _ = socket.gethostbyname(host)
                 elapsed_ms = max(1, int((time.time() - t0) * 1000))
                 self.send_response(f"\r\n+{elapsed_ms}\r\n\r\nOK\r\n")
-            except Exception:
+            except OSError:
                 self.send_response("\r\n+timeout\r\n\r\nERROR\r\n")
 
         elif u_cmd.startswith("AT+CIPDOMAIN="):
-            host = cmd.split("=")[1].strip().strip('"')
+            host = cmd.partition("=")[2].strip().strip('"')
             try:
                 ip = socket.gethostbyname(host)
                 self.send_response(f'\r\n+CIPDOMAIN:"{ip}"\r\n\r\nOK\r\n')
-            except Exception:
+            except OSError:
                 self.send_response("\r\nDNS Fail\r\n\r\nERROR\r\n")
 
         else:
             self.log(f"Unhandled command '{cmd}', returning OK")
             self.send_response("\r\nOK\r\n")
 
-    def handle_cipstart(self, cmd: str):
-        # Format: AT+CIPSTART="TCP","host",port
+    def handle_cipstart(self, cmd: str) -> None:
         if self.tcp_sock:
             self.send_response("\r\nALREADY CONNECTED\r\n\r\nERROR\r\n")
             return
 
-        parts = cmd[len("AT+CIPSTART="):].strip().split(",")
+        _, _, params = cmd.partition("=")
+        parts = [p.strip().strip('"') for p in params.split(",")]
         if len(parts) < 3:
             self.send_response("\r\nERROR\r\n")
             return
 
-        conn_type = parts[0].strip().strip('"').upper()
-        host = parts[1].strip().strip('"')
+        conn_type, host, port_str = parts[0].upper(), parts[1], parts[2]
         try:
-            port = int(parts[2].strip())
+            port = int(port_str)
         except ValueError:
             self.send_response("\r\nERROR\r\n")
             return
@@ -263,34 +300,30 @@ class ESP8266Simulator:
             self.tcp_port = port
             self.log(f"TCP connection established to {host}:{port}")
             self.send_response("\r\nCONNECT\r\n\r\nOK\r\n")
-        except Exception as e:
+        except OSError as e:
             self.log(f"TCP connection failed: {e}")
             self.send_response("\r\nCLOSED\r\n\r\nCONNECT FAIL\r\n\r\nERROR\r\n")
 
-    def close_socket(self):
+    def close_socket(self) -> None:
         if self.tcp_sock:
-            try:
+            with contextlib.suppress(OSError):
                 self.tcp_sock.close()
-            except Exception:
-                pass
             self.tcp_sock = None
             self.tcp_host = None
             self.tcp_port = None
             self.log("TCP socket closed")
 
-    def process_master_input(self, data: bytes):
-        now = time.time()
-
-        if self.mode == MODE_COMMAND:
+    def process_master_input(self, data: bytes) -> None:
+        if self.mode == OperatingMode.COMMAND:
             for b in data:
                 if self.echo:
                     self.write_pty(bytes([b]))
-                if b == ord('\r'):
+                if b == ord("\r"):
                     self.last_was_cr = True
                     if self.cmd_buffer:
                         self.handle_command(self.cmd_buffer)
                         self.cmd_buffer.clear()
-                elif b == ord('\n'):
+                elif b == ord("\n"):
                     if self.last_was_cr:
                         self.last_was_cr = False
                         continue
@@ -303,29 +336,25 @@ class ESP8266Simulator:
                     self.cmd_buffer.append(b)
             return
 
-        # MODE_STREAM: Transparent passthrough with Hayes +++ detection
+        # OperatingMode.STREAM: Transparent passthrough with Hayes +++ detection
         # Consume any trailing newline from the command that entered stream mode
-        if self.last_was_cr and len(data) > 0 and data[0] == ord('\n'):
+        if self.last_was_cr and len(data) > 0 and data[0] == ord("\n"):
             self.last_was_cr = False
             data = data[1:]
             if not data:
                 return
         self.last_was_cr = False
 
-        # Hayes requirements:
-        # 1. >= 0.9s silence before the first '+'
-        # 2. Exactly '+++' with inter-character time < 1.0s
-        # 3. >= 0.9s silence after the third '+'
-        GUARD_TIME = 0.9
-
         for b in data:
             char = bytes([b])
             now = time.time()
 
-            # If we were in candidate state (already got 3 '+') and a character arrived before guard time:
+            # If in candidate state (3 '+' received) and a character arrived before guard time:
             if self.escape_candidate:
-                # Sequence broken because post-guard silence was violated!
-                self.log(f"Escape candidate broken by byte {char!r} after {now - self.escape_candidate_time:.3f}s (needed {GUARD_TIME}s)")
+                self.log(
+                    f"Escape candidate broken by byte {char!r} after {now - self.escape_candidate_time:.3f}s "
+                    f"(needed {GUARD_TIME}s)"
+                )
                 self.escape_candidate = False
                 self.forward_to_socket(bytes(self.escape_buf))
                 self.escape_buf.clear()
@@ -333,21 +362,18 @@ class ESP8266Simulator:
                 self.forward_to_socket(char)
                 continue
 
-            if char == b'+':
+            if char == b"+":
                 if len(self.escape_buf) == 0:
-                    # First '+' requires pre-guard silence
                     if (now - self.last_char_time) >= GUARD_TIME:
                         self.escape_buf.append(b)
                         self.last_char_time = now
                         continue
                     else:
-                        # Insufficient silence before '+'
                         self.last_char_time = now
                         self.forward_to_socket(char)
                         continue
                 elif len(self.escape_buf) < 3:
-                    # Subsequent '+' characters: must arrive within 1.0s of previous '+'
-                    if (now - self.last_char_time) < 1.0:
+                    if (now - self.last_char_time) < INTER_CHAR_TIMEOUT:
                         self.escape_buf.append(b)
                         self.last_char_time = now
                         if len(self.escape_buf) == 3:
@@ -356,15 +382,12 @@ class ESP8266Simulator:
                             self.log("Candidate +++ escape detected, waiting for post-guard silence...")
                         continue
                     else:
-                        # Too much delay between pluses: sequence broken
                         self.forward_to_socket(bytes(self.escape_buf))
                         self.escape_buf.clear()
-                        # This new '+' starts a new sequence if silence was >= GUARD_TIME
                         self.escape_buf.append(b)
                         self.last_char_time = now
                         continue
 
-            # Non-'+' byte
             if self.escape_buf:
                 self.forward_to_socket(bytes(self.escape_buf))
                 self.escape_buf.clear()
@@ -373,60 +396,59 @@ class ESP8266Simulator:
             self.last_char_time = now
             self.forward_to_socket(char)
 
-    def check_escape_timeout(self):
+    def check_escape_timeout(self) -> None:
         now = time.time()
-        if self.mode == MODE_STREAM:
+        if self.mode == OperatingMode.STREAM:
             if self.escape_candidate:
-                if (now - self.escape_candidate_time) >= 0.9:
-                    # Post-guard silence verified! Transition back to command mode
+                if (now - self.escape_candidate_time) >= GUARD_TIME:
                     self.log("+++ Escape sequence verified! Dropping to AT command mode.")
-                    self.mode = MODE_COMMAND
+                    self.mode = OperatingMode.COMMAND
                     self.escape_buf.clear()
                     self.escape_candidate = False
-                    # Do NOT emit OK on escape; wait for next AT command
             elif self.escape_buf and len(self.escape_buf) < 3:
-                # Incomplete sequence timed out without reaching 3 pluses
-                if (now - self.last_char_time) >= 0.9:
+                if (now - self.last_char_time) >= GUARD_TIME:
                     self.forward_to_socket(bytes(self.escape_buf))
                     self.escape_buf.clear()
 
-    def forward_to_socket(self, data: bytes):
+    def forward_to_socket(self, data: bytes) -> None:
         if self.tcp_sock:
             try:
                 self.tcp_sock.sendall(data)
-            except Exception as e:
+            except OSError as e:
                 self.log(f"Socket send error: {e}")
                 self.handle_remote_disconnect()
 
-    def handle_remote_disconnect(self):
+    def handle_remote_disconnect(self) -> None:
         self.log("Remote server disconnected")
         self.close_socket()
-        if self.mode == MODE_STREAM:
-            self.mode = MODE_COMMAND
+        if self.mode == OperatingMode.STREAM:
+            self.mode = OperatingMode.COMMAND
             self.write_pty(b"\r\nCLOSED\r\n")
 
-    def run(self):
-        print(f"============================================================")
-        print(f"  MOD-WIFI-ESP8266 Simulator (ESP-AT v1.7.4.0)")
-        print(f"============================================================")
+    def run(self) -> None:
+        """Run the main event loop bridging PTY and TCP socket."""
+        print("=" * 60)
+        print("  MOD-WIFI-ESP8266 Simulator (ESP-AT v1.7.4.0)")
+        print("=" * 60)
         print(f"  PTY Device: {self.slave_name}")
         if self.symlink:
             print(f"  Symlink:    {self.symlink}")
-        print(f"  Baud Rate:  115200 (8-N-1)")
-        print(f"\nTo launch Fab Agon Emulator with this bridge:")
-        print(f"  fab-agon-emulator --uart1-device {self.slave_name} --uart1-baud 115200\n")
-        print(f"Press Ctrl+C to exit.")
-        print(f"============================================================\n", flush=True)
+        print("  Baud Rate:  115200 (8-N-1)")
+        print("\nTo launch Fab Agon Emulator with this bridge:")
+        print(f"  fab-agon-emulator --uart1-device {self.slave_name} --uart1-baud 0\n")
+        print("Press Ctrl+C to exit.")
+        print("=" * 60 + "\n", flush=True)
 
         try:
             while True:
+                if self.master_fd is None:
+                    break
                 rlist = [self.master_fd]
                 if self.tcp_sock:
                     rlist.append(self.tcp_sock)
 
                 # Poll with 50ms timeout to service escape timers
                 readable, _, _ = select.select(rlist, [], [], 0.05)
-
                 self.check_escape_timeout()
 
                 for fd in readable:
@@ -434,67 +456,60 @@ class ESP8266Simulator:
                         try:
                             data = os.read(self.master_fd, 1024)
                             if not data:
-                                break
+                                return
                             self.process_master_input(data)
                         except OSError as e:
                             self.log(f"Master PTY read error: {e}")
-                            break
+                            return
 
                     elif self.tcp_sock and fd == self.tcp_sock:
                         try:
                             net_data = self.tcp_sock.recv(2048)
                             if not net_data:
                                 self.handle_remote_disconnect()
-                            else:
-                                if self.mode == MODE_STREAM:
-                                    self.write_pty(net_data)
+                            elif self.mode == OperatingMode.STREAM:
+                                self.write_pty(net_data)
                         except (BlockingIOError, InterruptedError):
                             pass
-                        except Exception as e:
+                        except OSError as e:
                             self.log(f"Socket recv error: {e}")
                             self.handle_remote_disconnect()
 
         except KeyboardInterrupt:
             print("\nShutting down ESP8266 simulator...")
-        finally:
-            self.close_socket()
-            try:
-                os.close(self.master_fd)
-                os.close(self.slave_fd)
-            except Exception:
-                pass
-            if self.symlink and os.path.islink(self.symlink):
-                try:
-                    os.unlink(self.symlink)
-                except Exception:
-                    pass
 
 
-def main():
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="MOD-WIFI-ESP8266 Coprocessor Simulator for Agon Light 2")
-    parser.add_argument("--symlink", default="/tmp/agon-uart1", help="Symlink path for PTY (default: /tmp/agon-uart1)")
-    parser.add_argument("--ip", default="192.168.1.100", help="Simulated local IP address")
+    parser.add_argument("--symlink", default=str(DEFAULT_SYMLINK), help="Symlink path for PTY (default: /tmp/agon-uart1)")
+    parser.add_argument("--ip", default=DEFAULT_IP, help="Simulated local IP address")
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose debug logging")
     parser.add_argument("--launch", help="Path to fab-agon-emulator binary to automatically start")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    sim = ESP8266Simulator(symlink=args.symlink, verbose=args.verbose, simulated_ip=args.ip)
+    with ESP8266Simulator(symlink=args.symlink, verbose=args.verbose, simulated_ip=args.ip) as sim:
+        emu_proc: subprocess.Popen[str] | None = None
+        if args.launch:
+            launch_path = Path(args.launch).resolve()
+            cmd = [str(launch_path), "--uart1-device", sim.slave_name, "--uart1-baud", "0"]
+            emu_cwd = launch_path.parent
+            print(f"Launching emulator: {' '.join(cmd)} (cwd: {emu_cwd})")
+            emu_proc = subprocess.Popen(cmd, cwd=emu_cwd)
 
-    if args.launch:
-        # Note: on macOS, virtual PTYs fail with ENOTTY (Not a typewriter) if baud > 0
-        # Passing 0 causes fab-agon-emulator's serialport to skip IOSSIOSPEED and succeed.
-        cmd = [args.launch, "--uart1-device", sim.slave_name, "--uart1-baud", "0"]
-        emu_cwd = os.path.dirname(os.path.abspath(args.launch))
-        print(f"Launching emulator: {' '.join(cmd)} (cwd: {emu_cwd})")
-        emu_proc = subprocess.Popen(cmd, cwd=emu_cwd)
+        try:
+            sim.run()
+        finally:
+            if emu_proc is not None:
+                with contextlib.suppress(ProcessLookupError):
+                    emu_proc.terminate()
+                    try:
+                        emu_proc.wait(timeout=1.0)
+                    except subprocess.TimeoutExpired:
+                        emu_proc.kill()
+                        emu_proc.wait(timeout=1.0)
 
-        def sig_handler(sig, frame):
-            emu_proc.terminate()
-            sys.exit(0)
+    return 0
 
-        signal.signal(signal.SIGINT, sig_handler)
-
-    sim.run()
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
