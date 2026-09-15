@@ -1,5 +1,5 @@
 /*
- * openstream - Open transparent TCP stream on MOD-WIFI-ESP8266 for Agon Light 2
+ * openstream - Open transparent TCP stream on MOD-WIFI-ESP8266 for Agon family
  *
  * Usage: openstream <host_or_ip> <port>
  *

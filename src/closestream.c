@@ -1,5 +1,5 @@
 /*
- * closestream - Close transparent TCP stream on MOD-WIFI-ESP8266 for Agon Light 2
+ * closestream - Close transparent TCP stream on MOD-WIFI-ESP8266 for Agon family
  *
  * Usage: closestream
  *

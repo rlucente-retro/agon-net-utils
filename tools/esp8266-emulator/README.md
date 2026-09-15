@@ -149,8 +149,8 @@ Compile all utilities and copy them to the emulator's `sdcard/mos/` folder:
 
 ```bash
 make clean && make
-cp openstream/bin/openstream.bin /path/to/fab-agon-emulator/sdcard/mos/
-cp closestream/bin/closestream.bin /path/to/fab-agon-emulator/sdcard/mos/
+cp bin/openstream.bin /path/to/fab-agon-emulator/sdcard/mos/
+cp bin/closestream.bin /path/to/fab-agon-emulator/sdcard/mos/
 ```
 
 ### Step 2: Start Mock Server (Terminal 1)

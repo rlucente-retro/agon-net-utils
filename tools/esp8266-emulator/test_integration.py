@@ -232,8 +232,8 @@ def main():
     autoexec_bak = os.path.join(sdcard_dir, "autoexec.txt.test_bak")
 
     # Ensure binaries exist
-    openstream_bin = os.path.join(REPO_ROOT, "openstream", "bin", "openstream.bin")
-    closestream_bin = os.path.join(REPO_ROOT, "closestream", "bin", "closestream.bin")
+    openstream_bin = os.path.join(REPO_ROOT, "bin", "openstream.bin")
+    closestream_bin = os.path.join(REPO_ROOT, "bin", "closestream.bin")
 
     if not os.path.isfile(openstream_bin):
         print("[-] Error: openstream.bin not found. Run 'make' first.")

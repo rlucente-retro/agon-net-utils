@@ -1,5 +1,5 @@
 /*
- * esp8266.h - Common MOD-WIFI-ESP8266 utility functions for Agon Light 2
+ * esp8266.h - Common MOD-WIFI-ESP8266 utility functions for Agon family
  */
 
 #ifndef _ESP8266_H
