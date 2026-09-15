@@ -1,6 +1,6 @@
 # agon-net-utils
 
-Network utilities for the **Olimex Agon Light 2** (Zilog eZ80F92) running Quark MOS, specifically supporting network coprocessor workflows with the **Olimex MOD-WIFI-ESP8266** module on UART1.
+Network utilities for the **Agon family** (Agon Light, Agon Light 2, etc., based on the Zilog eZ80F92) running Quark MOS, specifically supporting network coprocessor workflows with the **Olimex MOD-WIFI-ESP8266** module on UART1.
 
 ## Utilities
 

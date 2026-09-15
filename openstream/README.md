@@ -1,6 +1,6 @@
-# openstream - Transparent TCP Streaming Utility for Agon Light 2
+# openstream - Transparent TCP Streaming Utility for Agon Family
 
-`openstream` is a native Agon Light 2 MOS utility that configures the **Olimex MOD-WIFI-ESP8266** module (on UART1) into transparent streaming mode (`CIPMODE=1`) and connects to a remote TCP server (such as a socket-enabled `TRS-NET.py` server for TRS-OS).
+`openstream` is a native Agon family MOS utility that configures the **Olimex MOD-WIFI-ESP8266** module (on UART1) into transparent streaming mode (`CIPMODE=1`) and connects to a remote TCP server (such as a socket-enabled `TRS-NET.py` server for TRS-OS).
 
 Upon receiving the streaming prompt (`>`), `openstream` cleanly closes the MOS UART1 driver and returns to the MOS command line, leaving the transparent TCP socket active and ready for the operating system loader (`OSboot.bin`).
 
@@ -11,7 +11,7 @@ To close an active stream and return the modem to command mode, use [`closestrea
 ## Features
 
 * **Transparent Passthrough Mode (`CIPMODE=1`):** Switches the ESP8266 from ASCII AT command mode to raw bidirectional TCP streaming at 115,200 baud (8-N-1).
-* **Self-Healing Stream Recovery:** Automatically detects if the module is stuck in an active streaming mode (e.g., following a CPU hardware reset or previous crash). Enforces 1.0s Hayes silence guard times around `+++`, tears down dangling sockets, and returns the modem to command mode before establishing the new stream.
+* **Self-Healing Stream Recovery:** Automatically detects if the module is stuck in an active streaming mode (e.g., following a CPU hardware reset or previous crash). Enforces 1.25s Hayes silence guard times around `+++`, tears down dangling sockets, and returns the modem to command mode before establishing the new stream.
 * **Direct IP & Domain Addressing:** Accepts raw IPv4 addresses or standard DNS domain names, leveraging the ESP8266's internal LwIP DNS resolver over Wi-Fi.
 * **Clean Handover Hygiene:** Immediately after the `>` prompt is confirmed, residual UART characters are flushed and `mos_uclose()` is called to detach the MOS interrupt handler. Zero stray characters or newlines are transmitted over UART1 upon exit.
 
@@ -33,7 +33,7 @@ The resulting executable binary will be generated at `bin/openstream.bin`.
 
 ## Installation
 
-Copy `bin/openstream.bin` to the `/mos/` directory of your Agon Light 2 microSD card. Placing it in `/mos/` ensures it is co-located with `OSboot.bin` and available from any working directory across all Quark MOS versions.
+Copy `bin/openstream.bin` to the `/mos/` directory of your Agon microSD card. Placing it in `/mos/` ensures it is co-located with `OSboot.bin` and available from any working directory across all Quark MOS versions.
 
 ---
 
