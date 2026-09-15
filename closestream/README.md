@@ -41,12 +41,6 @@ Copy `bin/closestream.bin` to the `/mos/` directory of your Agon microSD card. P
 closestream
 ```
 
-### Examples
-
-```text
-closestream
-```
-
 Expected output:
 
 ```text
