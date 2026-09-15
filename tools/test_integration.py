@@ -142,7 +142,7 @@ def run_stage1(
     print("  STAGE 1: openstream & Bidirectional Stream Verification")
     print("------------------------------------------------------------")
 
-    autoexec_path.write_text(f"LOAD mos/openstream.bin\nRUN . 127.0.0.1 {port}\n", encoding="utf-8")
+    autoexec_path.write_text(f"openstream 127.0.0.1 {port}\n", encoding="utf-8")
 
     server_proc: subprocess.Popen[str] | None = None
     sim_proc: subprocess.Popen[str] | None = None
@@ -245,7 +245,7 @@ def run_stage2(
     print("------------------------------------------------------------")
 
     autoexec_path.write_text(
-        f"LOAD mos/openstream.bin\nRUN . 127.0.0.1 {port}\nLOAD mos/closestream.bin\nRUN\n",
+        f"openstream 127.0.0.1 {port}\nclosestream\n",
         encoding="utf-8",
     )
 

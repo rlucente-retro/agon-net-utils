@@ -35,6 +35,18 @@ fi
 echo "Using emulator binary: $EMU_BIN"
 echo "Starting ESP8266 simulator and bridging to UART1..."
 
+# Ensure latest compiled binaries are synced to emulator sdcard/mos
+EMU_DIR="$(dirname "$EMU_BIN")"
+if [ -d "$EMU_DIR/sdcard" ]; then
+    mkdir -p "$EMU_DIR/sdcard/mos"
+    if [ -f "$REPO_ROOT/bin/openstream.bin" ]; then
+        cp "$REPO_ROOT/bin/openstream.bin" "$EMU_DIR/sdcard/mos/"
+    fi
+    if [ -f "$REPO_ROOT/bin/closestream.bin" ]; then
+        cp "$REPO_ROOT/bin/closestream.bin" "$EMU_DIR/sdcard/mos/"
+    fi
+fi
+
 # Resolve Python interpreter (prefer virtual environment if present)
 if [ -n "$VIRTUAL_ENV" ] && [ -x "$VIRTUAL_ENV/bin/python3" ]; then
     PYTHON_BIN="$VIRTUAL_ENV/bin/python3"

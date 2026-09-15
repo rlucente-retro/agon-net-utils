@@ -111,8 +111,7 @@ Enforces 1.25s silence guard intervals around the Hayes `+++` escape code, termi
 A typical `autoexec.txt` configuration on your microSD card to initialize network streaming and launch TRS-OS:
 
 ```text
-LOAD mos/openstream.bin
-RUN . 192.168.1.50 65432
+openstream 192.168.1.50 65432
 LOAD OSboot.bin
 RUN
 ```

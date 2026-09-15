@@ -16,8 +16,9 @@ CFLAGS      = -mllvm -z80-gas-style -mllvm -z80-print-zero-offset -nostdinc -Isr
 LINKER      = $(TOOLBINDIR)/ez80-none-elf-ld
 SETPROGNAME = $(TOOLBINDIR)/agondev-setname
 
-RAM_START ?= 0x40000
-RAM_SIZE  ?= 0x70000
+# MOSlet executables in /mos are loaded at 0x0B0000 (0x0B0000 - 0x0B7FFF, 32KB max)
+RAM_START ?= 0x0B0000
+RAM_SIZE  ?= 0x008000
 MEMCONFIG = -defsym=RAM_START=$(RAM_START) -defsym=RAM_SIZE=$(RAM_SIZE) -defsym=_has_exit_handler=0
 LINKERLIBFLAGS = -L$(LIBDIR) -l agon
 
