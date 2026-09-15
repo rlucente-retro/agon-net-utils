@@ -84,10 +84,28 @@ cd tools
 ./test_integration.py
 ```
 
-Optional arguments:
-* `--emulator /path/to/fab-agon-emulator`: Specify custom emulator binary path (defaults to standard repo location or PATH).
-* `--port 65432`: Customize the mock TCP port.
-* `--timeout 10.0`: Customize the handshake timeout.
+#### Emulator Resolution & User Overrides
+
+Both `test_integration.py` and `run_emulator.sh` locate the `fab-agon-emulator` binary in the following priority order:
+
+1. **Command-line argument:**
+   ```bash
+   ./test_integration.py --emulator /path/to/fab-agon-emulator
+   ```
+2. **Environment variable override (`FAB_AGON_EMULATOR`):**
+   ```bash
+   export FAB_AGON_EMULATOR=/path/to/fab-agon-emulator
+   ./test_integration.py
+   ```
+3. **Default relative path (`DEFAULT_EMULATOR`):**
+   Relative to the repository root directory (`../fab-agon-emulator-v1.2.4-macos-arm64/fab-agon-emulator`).
+4. **System `PATH`:**
+   Automatically detected if `fab-agon-emulator` is installed in your system PATH.
+
+Optional arguments for `test_integration.py`:
+* `--emulator`, `-e`: Path to `fab-agon-emulator` executable.
+* `--port`, `-p`: TCP port for mock server (default: `65432`).
+* `--timeout`, `-t`: Max handshake timeout in seconds (default: `10.0`).
 
 ### Expected Output
 
@@ -171,6 +189,9 @@ The server will print:
 ```bash
 cd tools
 ./run_emulator.sh
+# Or specify a custom emulator executable:
+# ./run_emulator.sh /path/to/fab-agon-emulator
+# Or export FAB_AGON_EMULATOR=/path/to/fab-agon-emulator
 ```
 
 This starts `esp8266_sim.py` in verbose mode and automatically launches `fab-agon-emulator` linked to the allocated PTY with `--uart1-baud 0`.

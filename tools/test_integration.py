@@ -29,13 +29,32 @@ import argparse
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
-DEFAULT_EMU = "/Users/richardlucente/development/git/fab-agon-emulator-v1.2.4-macos-arm64/fab-agon-emulator"
+
+# Default relative path to emulator executable (relative to repository root)
+DEFAULT_EMULATOR = "../fab-agon-emulator-v1.2.4-macos-arm64/fab-agon-emulator"
 
 def find_emulator(custom_path=None):
-    if custom_path and os.path.isfile(custom_path) and os.access(custom_path, os.X_OK):
-        return os.path.abspath(custom_path)
-    if os.path.isfile(DEFAULT_EMU) and os.access(DEFAULT_EMU, os.X_OK):
-        return DEFAULT_EMU
+    # 1. Explicit command-line argument
+    if custom_path:
+        cand = os.path.expanduser(custom_path)
+        if os.path.isfile(cand) and os.access(cand, os.X_OK):
+            return os.path.abspath(cand)
+        print(f"[-] Error: Specified emulator binary not found or not executable: {custom_path}")
+        return None
+
+    # 2. Environment variable override
+    env_emu = os.environ.get("FAB_AGON_EMULATOR")
+    if env_emu:
+        cand = os.path.expanduser(env_emu)
+        if os.path.isfile(cand) and os.access(cand, os.X_OK):
+            return os.path.abspath(cand)
+
+    # 3. Default relative path (relative to repository root)
+    rel_cand = os.path.abspath(os.path.join(REPO_ROOT, DEFAULT_EMULATOR))
+    if os.path.isfile(rel_cand) and os.access(rel_cand, os.X_OK):
+        return rel_cand
+
+    # 4. System PATH
     which_emu = subprocess.run(["which", "fab-agon-emulator"], stdout=subprocess.PIPE, text=True).stdout.strip()
     if which_emu and os.access(which_emu, os.X_OK):
         return which_emu

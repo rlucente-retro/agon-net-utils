@@ -130,6 +130,14 @@ cd tools
 ./test_integration.py
 ```
 
+By default, the tools check for `fab-agon-emulator` in your system `PATH`, via the `FAB_AGON_EMULATOR` environment variable, or at the relative path `../fab-agon-emulator-*/fab-agon-emulator`. You can explicitly provide a custom emulator path with:
+
+```bash
+./test_integration.py --emulator /path/to/fab-agon-emulator
+# or
+export FAB_AGON_EMULATOR=/path/to/fab-agon-emulator
+```
+
 This automated runner:
 1. Boots a mock TCP server on port 65432.
 2. Initializes the MOD-WIFI-ESP8266 coprocessor simulator on a virtual PTY (`/tmp/agon-uart1`).
