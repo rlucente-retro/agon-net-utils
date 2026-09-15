@@ -93,13 +93,13 @@ static int wait_for_ok(uint24_t timeout_ms) {
             continue;
         }
 
-        if (c == '\r') {
-            continue;
-        }
+        switch (c) {
+        case '\r':
+            break;
 
-        if (c == '\n') {
+        case '\n':
             if (len == 0) {
-                continue;
+                break;
             }
             line[len] = '\0';
             len = 0;
@@ -112,11 +112,13 @@ static int wait_for_ok(uint24_t timeout_ms) {
                 strstr(line, "Fail") != NULL) {
                 return 0;
             }
-            continue;
-        }
+            break;
 
-        if (len < (BUFFER_SIZE - 1)) {
-            line[len++] = (char)c;
+        default:
+            if (len < (BUFFER_SIZE - 1)) {
+                line[len++] = (char)c;
+            }
+            break;
         }
     }
     return -1; // timeout
@@ -138,13 +140,13 @@ static int wait_for_connect(uint24_t timeout_ms) {
             continue;
         }
 
-        if (c == '\r') {
-            continue;
-        }
+        switch (c) {
+        case '\r':
+            break;
 
-        if (c == '\n') {
+        case '\n':
             if (len == 0) {
-                continue;
+                break;
             }
             line[len] = '\0';
             len = 0;
@@ -161,11 +163,13 @@ static int wait_for_connect(uint24_t timeout_ms) {
             if (strstr(line, "CONNECT") != NULL || strstr(line, "ALREADY CONNECTED") != NULL) {
                 return 1;
             }
-            continue;
-        }
+            break;
 
-        if (len < (BUFFER_SIZE - 1)) {
-            line[len++] = (char)c;
+        default:
+            if (len < (BUFFER_SIZE - 1)) {
+                line[len++] = (char)c;
+            }
+            break;
         }
     }
     return -1; // timeout
@@ -184,18 +188,17 @@ static int wait_for_prompt(uint24_t timeout_ms) {
             continue;
         }
 
-        // The transparent prompt '>' is emitted without a trailing newline
-        if (c == '>') {
+        switch (c) {
+        case '>':
+            // The transparent prompt '>' is emitted without a trailing newline
             return 1;
-        }
 
-        if (c == '\r') {
-            continue;
-        }
+        case '\r':
+            break;
 
-        if (c == '\n') {
+        case '\n':
             if (len == 0) {
-                continue;
+                break;
             }
             line[len] = '\0';
             len = 0;
@@ -205,11 +208,13 @@ static int wait_for_prompt(uint24_t timeout_ms) {
                 strstr(line, "Fail") != NULL) {
                 return 0;
             }
-            continue;
-        }
+            break;
 
-        if (len < (BUFFER_SIZE - 1)) {
-            line[len++] = (char)c;
+        default:
+            if (len < (BUFFER_SIZE - 1)) {
+                line[len++] = (char)c;
+            }
+            break;
         }
     }
     return -1; // timeout
