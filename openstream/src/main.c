@@ -14,6 +14,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdarg.h>
+#include <ctype.h>
 #include <agon/mos.h>
 
 #define BUFFER_SIZE 128
@@ -107,16 +108,14 @@ static int wait_for_ok(uint24_t timeout_ms) {
             if (strcmp(line, "OK") == 0) {
                 return 1;
             }
-            if (strstr(line, "ERROR") != NULL ||
-                strstr(line, "FAIL") != NULL ||
-                strstr(line, "Fail") != NULL) {
+            if (strstr(line, "ERROR") != NULL || strstr(line, "FAIL") != NULL) {
                 return 0;
             }
             break;
 
         default:
             if (len < (BUFFER_SIZE - 1)) {
-                line[len++] = (char)c;
+                line[len++] = (char)toupper(c);
             }
             break;
         }
@@ -152,10 +151,7 @@ static int wait_for_connect(uint24_t timeout_ms) {
             len = 0;
 
             // Check failure conditions FIRST to avoid substring false positives on "CONNECT FAIL"
-            if (strstr(line, "FAIL") != NULL || strstr(line, "Fail") != NULL) {
-                return 0;
-            }
-            if (strstr(line, "ERROR") != NULL || strstr(line, "CLOSED") != NULL) {
+            if (strstr(line, "FAIL") != NULL || strstr(line, "ERROR") != NULL || strstr(line, "CLOSED") != NULL) {
                 return 0;
             }
 
@@ -167,7 +163,7 @@ static int wait_for_connect(uint24_t timeout_ms) {
 
         default:
             if (len < (BUFFER_SIZE - 1)) {
-                line[len++] = (char)c;
+                line[len++] = (char)toupper(c);
             }
             break;
         }
@@ -203,16 +199,14 @@ static int wait_for_prompt(uint24_t timeout_ms) {
             line[len] = '\0';
             len = 0;
 
-            if (strstr(line, "ERROR") != NULL ||
-                strstr(line, "FAIL") != NULL ||
-                strstr(line, "Fail") != NULL) {
+            if (strstr(line, "ERROR") != NULL || strstr(line, "FAIL") != NULL) {
                 return 0;
             }
             break;
 
         default:
             if (len < (BUFFER_SIZE - 1)) {
-                line[len++] = (char)c;
+                line[len++] = (char)toupper(c);
             }
             break;
         }
