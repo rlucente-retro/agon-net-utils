@@ -1,7 +1,35 @@
-# AgonDev Build Objects
+# AgonDev Build Artifacts
+bin/
 obj/
-*.map
+*.bin
 *.noname.bin
+*.map
+*.o
+*.a
 
-# OS Artifacts
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Test & Temporary Artifacts
+*.bak
+*.test_bak
+*.log
+
+# Editor & IDE Artifacts
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating System Artifacts
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
