@@ -231,17 +231,25 @@ static int usage(void) {
 }
 
 // Parses and validates TCP port number (1-65535). Returns 0 on invalid input.
-static int parse_port(const char *s) {
-    char *endptr;
-    unsigned long port = strtoul(s, &endptr, 10);
-    if (*s == '\0' || *endptr != '\0' || port == 0 || port > 65535) {
+static uint16_t parse_port(const char *s) {
+    if (*s == '\0') {
         return 0;
     }
-    return (int)port;
+    uint24_t port = 0;
+    while (*s) {
+        if (*s < '0' || *s > '9') {
+            return 0;
+        }
+        port = port * 10 + (uint24_t)(*s++ - '0');
+        if (port > 65535) {
+            return 0;
+        }
+    }
+    return (uint16_t)port;
 }
 
 int main(int argc, char *argv[]) {
-    int port;
+    uint16_t port;
     if (argc < 3 || (port = parse_port(argv[2])) == 0) {
         return usage();
     }
