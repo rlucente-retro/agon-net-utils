@@ -81,8 +81,10 @@ static void flush_uart(void) {
     }
 }
 
-// Scans UART1 for "OK" (returns 1), "ERROR"/"FAIL" (returns 0), or timeout (returns -1)
-static int wait_for_ok(uint24_t timeout_ms) {
+// Scans UART1 for expected response, prompt character, or error with timeout.
+// Returns 1 on success, 0 on failure/error, -1 on timeout.
+static int wait_for_response(const char *success_token, int exact_match,
+                             char prompt_char, int check_closed, uint24_t timeout_ms) {
     uint24_t timeout_ticks = MS_TO_TICKS(timeout_ms);
     uint24_t start_tick = get_ticks();
     char line[BUFFER_SIZE];
@@ -92,6 +94,11 @@ static int wait_for_ok(uint24_t timeout_ms) {
         int c = mos_ugetc_nb();
         if (c < 0) {
             continue;
+        }
+
+        // Check for immediate un-delimited prompt character (e.g. '>')
+        if (prompt_char && c == prompt_char) {
+            return 1;
         }
 
         switch (c) {
@@ -105,11 +112,20 @@ static int wait_for_ok(uint24_t timeout_ms) {
             line[len] = '\0';
             len = 0;
 
-            if (strcmp(line, "OK") == 0) {
-                return 1;
-            }
-            if (strstr(line, "ERROR") != NULL || strstr(line, "FAIL") != NULL) {
+            // Check failure conditions first
+            if (strstr(line, "FAIL") != NULL || strstr(line, "ERROR") != NULL) {
                 return 0;
+            }
+            if (check_closed && strstr(line, "CLOSED") != NULL) {
+                return 0;
+            }
+
+            // Check success condition
+            if (success_token) {
+                if (exact_match ? (strcmp(line, success_token) == 0)
+                                : (strstr(line, success_token) != NULL)) {
+                    return 1;
+                }
             }
             break;
 
@@ -121,97 +137,24 @@ static int wait_for_ok(uint24_t timeout_ms) {
         }
     }
     return -1; // timeout
+}
+
+// Scans UART1 for "OK" (returns 1), "ERROR"/"FAIL" (returns 0), or timeout (returns -1)
+static inline int wait_for_ok(uint24_t timeout_ms) {
+    return wait_for_response("OK", 1, 0, 0, timeout_ms);
 }
 
 // Scans UART1 for TCP connection result:
 // Returns 1 on success (CONNECT or ALREADY CONNECTED)
 // Returns 0 on failure (CONNECT FAIL, CLOSED, ERROR, DNS Fail)
 // Returns -1 on timeout
-static int wait_for_connect(uint24_t timeout_ms) {
-    uint24_t timeout_ticks = MS_TO_TICKS(timeout_ms);
-    uint24_t start_tick = get_ticks();
-    char line[BUFFER_SIZE];
-    uint8_t len = 0;
-
-    while ((uint24_t)(get_ticks() - start_tick) < timeout_ticks) {
-        int c = mos_ugetc_nb();
-        if (c < 0) {
-            continue;
-        }
-
-        switch (c) {
-        case '\r':
-            break;
-
-        case '\n':
-            if (len == 0) {
-                break;
-            }
-            line[len] = '\0';
-            len = 0;
-
-            // Check failure conditions FIRST to avoid substring false positives on "CONNECT FAIL"
-            if (strstr(line, "FAIL") != NULL || strstr(line, "ERROR") != NULL || strstr(line, "CLOSED") != NULL) {
-                return 0;
-            }
-
-            // Check success conditions
-            if (strstr(line, "CONNECT") != NULL || strstr(line, "ALREADY CONNECTED") != NULL) {
-                return 1;
-            }
-            break;
-
-        default:
-            if (len < (BUFFER_SIZE - 1)) {
-                line[len++] = (char)toupper(c);
-            }
-            break;
-        }
-    }
-    return -1; // timeout
+static inline int wait_for_connect(uint24_t timeout_ms) {
+    return wait_for_response("CONNECT", 0, 0, 1, timeout_ms);
 }
 
 // Scans UART1 for '>' prompt from AT+CIPSEND (returns 1), "ERROR"/"FAIL" (returns 0), or timeout (returns -1)
-static int wait_for_prompt(uint24_t timeout_ms) {
-    uint24_t timeout_ticks = MS_TO_TICKS(timeout_ms);
-    uint24_t start_tick = get_ticks();
-    char line[BUFFER_SIZE];
-    uint8_t len = 0;
-
-    while ((uint24_t)(get_ticks() - start_tick) < timeout_ticks) {
-        int c = mos_ugetc_nb();
-        if (c < 0) {
-            continue;
-        }
-
-        switch (c) {
-        case '>':
-            // The transparent prompt '>' is emitted without a trailing newline
-            return 1;
-
-        case '\r':
-            break;
-
-        case '\n':
-            if (len == 0) {
-                break;
-            }
-            line[len] = '\0';
-            len = 0;
-
-            if (strstr(line, "ERROR") != NULL || strstr(line, "FAIL") != NULL) {
-                return 0;
-            }
-            break;
-
-        default:
-            if (len < (BUFFER_SIZE - 1)) {
-                line[len++] = (char)toupper(c);
-            }
-            break;
-        }
-    }
-    return -1; // timeout
+static inline int wait_for_prompt(uint24_t timeout_ms) {
+    return wait_for_response(NULL, 0, '>', 0, timeout_ms);
 }
 
 static void escape_stream_mode(void) {
