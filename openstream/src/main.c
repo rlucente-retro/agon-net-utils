@@ -221,23 +221,24 @@ static int prepare_esp(void) {
     return 1;
 }
 
+static int usage(void) {
+    log_msg("Usage: openstream <host_or_ip> <port>\n"
+            "  <host_or_ip>  Remote server hostname or IPv4 address\n"
+            "  <port>        TCP port number (1-65535)\n"
+            "Example: openstream 192.168.1.50 65432\n"
+            "         openstream server.local 65432\n");
+    return 1;
+}
+
 int main(int argc, char *argv[]) {
-    if (argc < 3) {
-        log_msg("Usage: openstream <host_or_ip> <port>\n");
-        log_msg("Example: openstream 192.168.1.50 65432\n");
-        log_msg("         openstream server.local 65432\n");
-        return 1;
+    int port;
+    if (argc < 3 || (port = atoi(argv[2])) <= 0 || port > 65535) {
+        return usage();
     }
 
     char host[BUFFER_SIZE];
     strncpy(host, argv[1], sizeof(host) - 1);
     host[sizeof(host) - 1] = '\0';
-
-    int port = atoi(argv[2]);
-    if (port <= 0 || port > 65535) {
-        log_msg("Error: Invalid port '%s' (must be 1-65535).\n", argv[2]);
-        return 1;
-    }
 
     sysvars = (volatile uint8_t *)mos_sysvars();
 
