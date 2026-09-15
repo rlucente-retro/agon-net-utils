@@ -86,9 +86,9 @@ Optional arguments:
 ============================================================
   openstream & ESP8266 Simulator Integration Test
 ============================================================
-Emulator Binary: /Users/richardlucente/development/git/fab-agon-emulator-v1.2.4-macos-arm64/fab-agon-emulator
+Emulator Binary: /path/to/fab-agon-emulator
 TCP Port:        65432
-SDCard Dir:      /Users/richardlucente/development/git/fab-agon-emulator-v1.2.4-macos-arm64/sdcard
+SDCard Dir:      /path/to/fab-agon-emulator/sdcard
 ------------------------------------------------------------
 [*] Starting Mock TCP Server...
 [*] Starting MOD-WIFI-ESP8266 Simulator (PTY: /tmp/agon-uart1)...
@@ -120,15 +120,15 @@ For interactive testing in the emulator window with manual MOS commands:
 Compile `openstream.bin` and copy it to the emulator's `sdcard/mos/` folder:
 
 ```bash
-cd /Users/richardlucente/development/git/agon-net-utils/openstream
+cd openstream
 make clean && make
-cp bin/openstream.bin /Users/richardlucente/development/git/fab-agon-emulator-v1.2.4-macos-arm64/sdcard/mos/
+cp bin/openstream.bin /path/to/fab-agon-emulator/sdcard/mos/
 ```
 
 ### Step 2: Start Mock Server (Terminal 1)
 
 ```bash
-cd /Users/richardlucente/development/git/agon-net-utils/tools/esp8266-emulator
+cd tools/esp8266-emulator
 ./mock_server.py --port 65432
 ```
 
@@ -141,7 +141,7 @@ The server will print:
 ### Step 3: Launch Simulator & Emulator (Terminal 2)
 
 ```bash
-cd /Users/richardlucente/development/git/agon-net-utils/tools/esp8266-emulator
+cd tools/esp8266-emulator
 ./run_emulator.sh
 ```
 

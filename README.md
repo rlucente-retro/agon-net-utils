@@ -41,7 +41,7 @@ This automated runner:
 1. Boots a mock TCP server on port 65432.
 2. Initializes the MOD-WIFI-ESP8266 coprocessor simulator on a virtual PTY (`/tmp/agon-uart1`).
 3. Launches `fab-agon-emulator` linked to the PTY.
-4. Executes `openstream` inside MOS and validates the complete AT command handshake (`AT`, `ATE0`, `CIPMUX`, `CIPMODE=1`, `CIPSTART`, `CIPSEND`).
+4. Executes `openstream` inside MOS and validates the complete AT command handshake (`AT`, `ATE0`, `AT+CIPCLOSE`, `AT+CIPMODE=0`, `AT+CIPMUX=0`, `AT+CIPMODE=1`, `AT+CIPSTART`, `AT+CIPSEND`).
 5. Establishes a transparent TCP connection to the mock server.
 6. Tests bidirectional payload transmission (`@ping` -> `@pong`).
 7. Shuts down cleanly and restores the emulator's SD card configuration.

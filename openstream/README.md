@@ -41,6 +41,11 @@ Copy `bin/openstream.bin` to the `/mos/` directory of your Agon Light 2 microSD 
 openstream <host_or_ip> <port>
 ```
 
+### Arguments
+
+* `<host_or_ip>`: Remote server hostname (e.g. `server.local`) or IPv4 address (e.g. `192.168.1.50`).
+* `<port>`: Remote TCP port number (`1`–`65535`).
+
 ### Examples
 
 Connect to a remote `TRS-NET.py` server listening on TCP port 65432:
