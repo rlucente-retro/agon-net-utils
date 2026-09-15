@@ -29,7 +29,7 @@ BINDIR = bin
 VENV ?= .venv
 PYTHON ?= $(shell if [ -n "$$VIRTUAL_ENV" ] && [ -x "$$VIRTUAL_ENV/bin/python3" ]; then echo "$$VIRTUAL_ENV/bin/python3"; elif [ -x $(VENV)/bin/python3 ]; then echo $(VENV)/bin/python3; else echo python3; fi)
 
-PROGRAMS = openstream closestream
+PROGRAMS = openstream closestream sendstream
 BINARIES = $(patsubst %, $(BINDIR)/%.bin, $(PROGRAMS))
 
 V ?= @
@@ -39,6 +39,7 @@ all: $(BINDIR) $(OBJDIR) $(BINARIES)
 
 openstream: $(BINDIR)/openstream.bin
 closestream: $(BINDIR)/closestream.bin
+sendstream: $(BINDIR)/sendstream.bin
 
 $(BINDIR)/%.bin: $(BINDIR)/%.noname.bin
 	@echo [Start address $(RAM_START)]
@@ -70,5 +71,5 @@ test: all
 	$(PYTHON) tools/test_integration.py
 
 .PRECIOUS: $(OBJDIR)/%.o $(BINDIR)/%.noname.bin
-.PHONY: all clean openstream closestream venv test
+.PHONY: all clean openstream closestream sendstream venv test
 

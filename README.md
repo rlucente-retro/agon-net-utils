@@ -9,6 +9,7 @@ Network utilities for the **Agon family** (Agon Light, Agon Light 2, etc., based
 | Binary / Script | Description |
 | :--- | :--- |
 | `openstream.bin` | Connects to a remote TCP host and puts the ESP8266 into transparent streaming mode (`CIPMODE=1`), preserving the link for subsequent OS bootloaders (e.g. `OSboot.bin` for TRS-OS). |
+| `sendstream.bin` | Sends a string payload over an active transparent stream and displays the response with timeout handling. |
 | `closestream.bin` | Escapes transparent streaming mode (`+++`), closes active TCP sockets (`AT+CIPCLOSE`), and returns the ESP8266 to standard command mode (`CIPMODE=0`). |
 | [`tools/esp8266_sim.py`](tools/esp8266_sim.py) | Virtual serial PTY coprocessor simulator for testing network tools in `fab-agon-emulator` without physical hardware. |
 
@@ -22,6 +23,7 @@ agon-net-utils/
 │   ├── esp8266.h        # Shared serial, timing, and AT command engine
 │   ├── esp8266.c        # Shared implementation (UART1, Hayes escape, restore)
 │   ├── openstream.c     # openstream entry point and connection setup
+│   ├── sendstream.c     # sendstream entry point and response listener
 │   └── closestream.c    # closestream entry point and teardown logic
 ├── bin/                 # Compiled executable binaries (.bin)
 ├── tools/               # Coprocessor simulator and automated test suite
@@ -43,16 +45,18 @@ You can also build an individual utility:
 ```bash
 make openstream
 # or
+make sendstream
+# or
 make closestream
 ```
 
-The resulting binaries will be generated at `bin/openstream.bin` and `bin/closestream.bin`.
+The resulting binaries will be generated at `bin/openstream.bin`, `bin/sendstream.bin`, and `bin/closestream.bin`.
 
 ---
 
 ## Installation
 
-Copy `bin/openstream.bin` and `bin/closestream.bin` to the `/mos/` directory of your Agon microSD card. Placing executables in `/mos/` ensures they are available from any working directory across all Quark MOS versions.
+Copy `bin/openstream.bin`, `bin/sendstream.bin`, and `bin/closestream.bin` to the `/mos/` directory of your Agon microSD card. Placing executables in `/mos/` ensures they are available from any working directory across all Quark MOS versions.
 
 ---
 
@@ -83,6 +87,31 @@ Link established. Ready for TRS-OS.
 ```
 
 Upon receiving the `>` streaming prompt, `openstream` flushes residual characters, calls `mos_uclose()` to detach the MOS interrupt handler, and returns cleanly to the MOS prompt with the stream active.
+
+---
+
+### `sendstream`
+
+Sends a string payload over an active transparent stream and prints any response received within the timeout period:
+
+```text
+sendstream <message>
+```
+
+#### Arguments
+* `<message>`: Text string to transmit over UART1. Automatically unescapes standard `\n`, `\r`, and `\t` escape sequences, and appends a trailing newline if none was provided.
+
+#### Example
+```text
+sendstream @ping
+```
+
+Expected output:
+```text
+@pong
+```
+
+Waits up to 2.0s for the first response byte and handles inter-byte streaming before returning cleanly to the MOS prompt with the stream preserved.
 
 ---
 

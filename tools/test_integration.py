@@ -142,12 +142,11 @@ def run_stage1(
     print("  STAGE 1: openstream & Bidirectional Stream Verification")
     print("------------------------------------------------------------")
 
-    autoexec_path.write_text(f"openstream 127.0.0.1 {port}\n", encoding="utf-8")
+    autoexec_path.write_text(f"openstream 127.0.0.1 {port}\nsendstream @ping\n", encoding="utf-8")
 
     server_proc: subprocess.Popen[str] | None = None
     sim_proc: subprocess.Popen[str] | None = None
     emu_proc: subprocess.Popen[str] | None = None
-    stream_ok = False
 
     try:
         print("[*] Starting Mock TCP Server...")
@@ -177,26 +176,8 @@ def run_stage1(
             text=True,
         )
 
-        print("[*] Waiting for openstream AT handshake and TCP connection...")
-        time.sleep(3.5)  # Allow openstream to complete handshake and exit to MOS
-
-        print("[*] Testing bidirectional stream payload (@ping -> @pong)...")
-        try:
-            with open(DEFAULT_PTY, "r+b", buffering=0) as pty_f:
-                pty_f.write(b"@ping\n")
-                # Wait with timeout to avoid potential hangs
-                readable, _, _ = select.select([pty_f], [], [], 2.0)
-                if readable:
-                    reply = pty_f.read(128)
-                    if b"pong" in reply:
-                        print(f"[+] Successfully received reply over UART1 stream: {reply!r}")
-                        stream_ok = True
-                    else:
-                        print(f"[-] Received unexpected stream data: {reply!r}")
-                else:
-                    print("[-] Timeout waiting for reply over UART1 stream")
-        except OSError as e:
-            print(f"[-] Stream read/write failed: {e}")
+        print("[*] Waiting for openstream & sendstream execution...")
+        time.sleep(5.0)  # Allow openstream and sendstream to complete and exit to MOS
 
     finally:
         kill_proc(emu_proc)
@@ -206,6 +187,12 @@ def run_stage1(
         emu_out = collect_output(emu_proc)
         sim_out = collect_output(sim_proc)
         server_out = collect_output(server_proc)
+
+    stream_ok = "@pong" in emu_out or "pong" in emu_out
+    if stream_ok:
+        print("[+] Successfully received @pong reply via sendstream")
+    else:
+        print("[-] sendstream @ping reply not detected in emulator output")
 
     at_handshake_ok = "AT+CIPMODE=1" in sim_out and "Entering transparent streaming mode" in sim_out
     socket_ok = "Client connected" in server_out
@@ -339,6 +326,7 @@ def main(argv: list[str] | None = None) -> int:
     # Ensure binaries exist
     openstream_bin = REPO_ROOT / "bin" / "openstream.bin"
     closestream_bin = REPO_ROOT / "bin" / "closestream.bin"
+    sendstream_bin = REPO_ROOT / "bin" / "sendstream.bin"
 
     if not openstream_bin.is_file():
         print("[-] Error: openstream.bin not found. Run 'make' first.", file=sys.stderr)
@@ -346,15 +334,19 @@ def main(argv: list[str] | None = None) -> int:
     if not closestream_bin.is_file():
         print("[-] Error: closestream.bin not found. Run 'make' first.", file=sys.stderr)
         return 1
+    if not sendstream_bin.is_file():
+        print("[-] Error: sendstream.bin not found. Run 'make' first.", file=sys.stderr)
+        return 1
 
     # Ensure binaries are installed in emulator sdcard/mos
     dest_mos_dir = sdcard_dir / "mos"
     dest_mos_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(openstream_bin, dest_mos_dir / "openstream.bin")
     shutil.copy2(closestream_bin, dest_mos_dir / "closestream.bin")
+    shutil.copy2(sendstream_bin, dest_mos_dir / "sendstream.bin")
 
     print("============================================================")
-    print("  openstream & closestream Integration Test Suite")
+    print("  openstream, sendstream & closestream Integration Test Suite")
     print("============================================================")
     print(f"Emulator Binary: {emu_bin}")
     print(f"TCP Port:        {args.port}")

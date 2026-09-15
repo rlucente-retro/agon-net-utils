@@ -45,6 +45,9 @@ if [ -d "$EMU_DIR/sdcard" ]; then
     if [ -f "$REPO_ROOT/bin/closestream.bin" ]; then
         cp "$REPO_ROOT/bin/closestream.bin" "$EMU_DIR/sdcard/mos/"
     fi
+    if [ -f "$REPO_ROOT/bin/sendstream.bin" ]; then
+        cp "$REPO_ROOT/bin/sendstream.bin" "$EMU_DIR/sdcard/mos/"
+    fi
 fi
 
 # Resolve Python interpreter (prefer virtual environment if present)

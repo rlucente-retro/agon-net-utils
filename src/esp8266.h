@@ -16,6 +16,9 @@
 // System timer ticks from MOS sysvars
 uint24_t get_ticks(void);
 
+// Writes character directly to eZ80 debug port 0x30 (echoed to host stdout by emulator)
+void debug_putc(char c);
+
 // Formatted logging with dual output (MOS screen + eZ80 debug port 0x30)
 void log_msg(const char *fmt, ...);
 

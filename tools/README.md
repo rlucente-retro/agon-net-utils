@@ -55,15 +55,13 @@ This toolkit provides a complete virtual ESP8266 network coprocessor environment
 
 ## Method 1: Automated Integration Test Suite (Recommended)
 
-An end-to-end automated test runner is provided in [`test_integration.py`](test_integration.py). It validates both utilities across two automated stages:
-
-### Stage 1: `openstream` & Transparent Data Streaming
-1. Installs the latest `openstream.bin` to `sdcard/mos/openstream.bin`.
+### Stage 1: `openstream` & `sendstream` Verification
+1. Installs latest `openstream.bin`, `sendstream.bin`, and `closestream.bin` to `sdcard/mos/`.
 2. Boots `mock_server.py` and `esp8266_sim.py`.
-3. Launches `fab-agon-emulator` with `autoexec.txt` invoking `openstream.bin 127.0.0.1 65432`.
+3. Launches `fab-agon-emulator` with `autoexec.txt` invoking `openstream 127.0.0.1 65432` followed by `sendstream @ping`.
 4. Validates the AT command sequence (`AT`, `ATE0`, `AT+CIPCLOSE`, `AT+CIPMODE=0`, `AT+CIPMUX=0`, `AT+CIPMODE=1`, `AT+CIPSTART`, `AT+CIPSEND`).
 5. Validates incoming TCP connection on `mock_server.py`.
-6. Transmits `@ping\n` through the transparent stream and validates `@pong\n` response.
+6. Validates transmission of `@ping\n` and receipt of `@pong\n` response by `sendstream`.
 
 ### Stage 2: `closestream` Escape & Teardown
 1. Installs the latest `closestream.bin` to `sdcard/mos/closestream.bin`.
@@ -177,6 +175,7 @@ Compile all utilities and copy them to the emulator's `sdcard/mos/` folder:
 ```bash
 make clean && make
 cp bin/openstream.bin /path/to/fab-agon-emulator/sdcard/mos/
+cp bin/sendstream.bin /path/to/fab-agon-emulator/sdcard/mos/
 cp bin/closestream.bin /path/to/fab-agon-emulator/sdcard/mos/
 ```
 
@@ -203,7 +202,7 @@ cd tools
 # Or export FAB_AGON_EMULATOR=/path/to/fab-agon-emulator
 ```
 
-This starts `esp8266_sim.py` in verbose mode and automatically launches `fab-agon-emulator` linked to the allocated PTY with `--uart1-baud 0`.
+This starts `esp8266_sim.py` in verbose mode and automatically launches `fab-agon-emulator` linked to the allocated PTY with `--uart1-baud 0`. (Note: `run_emulator.sh` automatically syncs the latest compiled binaries to `sdcard/mos/`).
 
 ### Step 4: Run `openstream`
 
@@ -212,13 +211,6 @@ In the emulator window:
 ```text
 openstream 127.0.0.1 65432
 ```
-
-> [!NOTE]
-> If testing via `autoexec.txt` instead of typing interactively, MOS does not perform dynamic star-command resolution for binaries in subdirectories. In `autoexec.txt`, use explicit load syntax:
-> ```text
-> LOAD mos/openstream.bin
-> RUN . 127.0.0.1 65432
-> ```
 
 ### Step 5: Observe Successful Link Establishment
 
@@ -250,7 +242,25 @@ In the **Mock Server Terminal (Terminal 1)**:
 [*] Silent mode: Waiting for client '@ping'...
 ```
 
-### Step 6: Teardown Link with `closestream`
+### Step 6: Test Data Transfer with `sendstream`
+
+In the **Emulator Window**:
+```text
+sendstream @ping
+```
+
+Expected output in the emulator:
+```text
+@pong
+```
+
+In the **Mock Server Terminal (Terminal 1)**:
+```text
+[RX] Received 6 bytes: b'@ping\n'
+[TX] Replying with '@pong\n'...
+```
+
+### Step 7: Teardown Link with `closestream`
 
 In the emulator window:
 
