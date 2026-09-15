@@ -10,7 +10,7 @@ Network utilities for the **Agon family** (Agon Light, Agon Light 2, etc., based
 | :--- | :--- |
 | `openstream.bin` | Connects to a remote TCP host and puts the ESP8266 into transparent streaming mode (`CIPMODE=1`), preserving the link for subsequent OS bootloaders (e.g. `OSboot.bin` for TRS-OS). |
 | `closestream.bin` | Escapes transparent streaming mode (`+++`), closes active TCP sockets (`AT+CIPCLOSE`), and returns the ESP8266 to standard command mode (`CIPMODE=0`). |
-| [`tools/esp8266-emulator/esp8266_sim.py`](tools/esp8266-emulator/esp8266_sim.py) | Virtual serial PTY coprocessor simulator for testing network tools in `fab-agon-emulator` without physical hardware. |
+| [`tools/esp8266_sim.py`](tools/esp8266_sim.py) | Virtual serial PTY coprocessor simulator for testing network tools in `fab-agon-emulator` without physical hardware. |
 
 ---
 
@@ -24,8 +24,7 @@ agon-net-utils/
 │   ├── openstream.c     # openstream entry point and connection setup
 │   └── closestream.c    # closestream entry point and teardown logic
 ├── bin/                 # Compiled executable binaries (.bin)
-├── tools/
-│   └── esp8266-emulator/# Coprocessor simulator and automated test suite
+├── tools/               # Coprocessor simulator and automated test suite
 └── Makefile             # Unified build system
 ```
 
@@ -122,12 +121,12 @@ RUN
 
 ## Testing
 
-A complete simulation environment and automated test suite for [Fab Agon Emulator](https://github.com/tomm/fab-agon-emulator) is provided under [`tools/esp8266-emulator/`](tools/esp8266-emulator/).
+A complete simulation environment and automated test suite for [Fab Agon Emulator](https://github.com/tomm/fab-agon-emulator) is provided under [`tools/`](tools/).
 
 To verify the full network pipeline locally without physical hardware:
 
 ```bash
-cd tools/esp8266-emulator
+cd tools
 ./test_integration.py
 ```
 
@@ -139,4 +138,4 @@ This automated runner:
 5. Validates `closestream` stream detection, Hayes `+++` escape, socket teardown, and mode reset.
 6. Restores original SD card configuration upon completion.
 
-See [`tools/esp8266-emulator/README.md`](tools/esp8266-emulator/README.md) for full documentation on manual interactive testing.
+See [`tools/README.md`](tools/README.md) for full documentation on manual interactive testing.

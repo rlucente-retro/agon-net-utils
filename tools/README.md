@@ -80,7 +80,7 @@ An end-to-end automated test runner is provided in [`test_integration.py`](test_
 ### Running the Automated Test
 
 ```bash
-cd tools/esp8266-emulator
+cd tools
 ./test_integration.py
 ```
 
@@ -156,7 +156,7 @@ cp bin/closestream.bin /path/to/fab-agon-emulator/sdcard/mos/
 ### Step 2: Start Mock Server (Terminal 1)
 
 ```bash
-cd tools/esp8266-emulator
+cd tools
 ./mock_server.py --port 65432
 ```
 
@@ -169,7 +169,7 @@ The server will print:
 ### Step 3: Launch Simulator & Emulator (Terminal 2)
 
 ```bash
-cd tools/esp8266-emulator
+cd tools
 ./run_emulator.sh
 ```
 
