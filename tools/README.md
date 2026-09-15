@@ -17,8 +17,6 @@ This toolkit provides a complete virtual ESP8266 network coprocessor environment
 
 | File | Role | Description |
 | :--- | :--- | :--- |
-| File | Role | Description |
-| :--- | :--- | :--- |
 | [`test_integration.py`](test_integration.py) | **Automated Test Suite** | Two-stage automated test script that boots `mock_server.py`, `esp8266_sim.py`, and `fab-agon-emulator`, verifies AT negotiation and bidirectional TCP streaming for `openstream` (Stage 1), validates Hayes `+++` escape, socket teardown, and mode reset for `closestream` (Stage 2), and restores SD card configuration. |
 | [`esp8266_sim.py`](esp8266_sim.py) | **Coprocessor Simulator** | Creates a virtual serial PTY, implements the Espressif ESP-AT v1.7.x firmware command set, manages transparent streaming mode (`CIPMODE=1`), proxies raw data over real TCP sockets, and detects Hayes `+++` escape sequences with guard silences. |
 | [`mock_server.py`](mock_server.py) | **Test TCP Server** | Lightweight test server that listens on port 65432, remaining completely silent until the client sends `@ping\n`, and responds with `@pong\n`. |
