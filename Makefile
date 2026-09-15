@@ -1,4 +1,4 @@
-SUBDIRS = openstream
+SUBDIRS = openstream closestream
 
 .PHONY: all clean $(SUBDIRS)
 

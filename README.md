@@ -7,20 +7,27 @@ Network utilities for the **Olimex Agon Light 2** (Zilog eZ80F92) running Quark 
 | Directory | Binary / Script | Description |
 | :--- | :--- | :--- |
 | [`openstream/`](openstream/) | `openstream.bin` | Connects to a remote TCP host and puts the ESP8266 into transparent streaming mode (`CIPMODE=1`), preserving the link for subsequent OS bootloaders (e.g. `OSboot.bin` for TRS-OS). |
+| [`closestream/`](closestream/) | `closestream.bin` | Escapes transparent streaming mode (`+++`), closes active TCP sockets (`AT+CIPCLOSE`), and returns the ESP8266 to standard command mode (`CIPMODE=0`). |
 | [`tools/esp8266-emulator/`](tools/esp8266-emulator/) | `esp8266_sim.py` | Virtual serial PTY coprocessor simulator for testing network tools in `fab-agon-emulator` without physical hardware. |
 
 ## Building
 
-Each utility directory contains its own `Makefile` using the [AgonDev SDK](https://github.com/Agon-Development-Community/agondev). 
+Each utility directory contains its own `Makefile` using the [AgonDev SDK](https://github.com/Agon-Development-Community/agondev), with shared serial and AT command logic consolidated under `common/`.
 
-To build `openstream`:
+To build all utilities from the repository root:
 
 ```bash
-cd openstream
 make
 ```
 
-The compiled binary will be placed at `openstream/bin/openstream.bin`.
+Or build an individual utility:
+
+```bash
+cd openstream    # or cd closestream
+make
+```
+
+The compiled binaries will be placed at `<utility>/bin/<utility>.bin`.
 
 ---
 

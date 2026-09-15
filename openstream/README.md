@@ -4,6 +4,8 @@
 
 Upon receiving the streaming prompt (`>`), `openstream` cleanly closes the MOS UART1 driver and returns to the MOS command line, leaving the transparent TCP socket active and ready for the operating system loader (`OSboot.bin`).
 
+To close an active stream and return the modem to command mode, use [`closestream`](../closestream/).
+
 ---
 
 ## Features

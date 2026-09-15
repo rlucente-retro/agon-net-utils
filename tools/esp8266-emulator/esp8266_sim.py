@@ -313,42 +313,82 @@ class ESP8266Simulator:
         self.last_was_cr = False
 
         # Hayes requirements:
-        # 1. >= 1.0s silence before +++
-        # 2. Exactly +++ with no other chars
-        # 3. >= 1.0s silence after +++
-        silence_before = (now - self.last_char_time) >= 1.0
-        self.last_char_time = now
+        # 1. >= 0.9s silence before the first '+'
+        # 2. Exactly '+++' with inter-character time < 1.0s
+        # 3. >= 0.9s silence after the third '+'
+        GUARD_TIME = 0.9
 
         for b in data:
             char = bytes([b])
-            if silence_before and char == b'+' and len(self.escape_buf) < 3:
-                self.escape_buf.append(b)
-                if len(self.escape_buf) == 3:
-                    self.escape_candidate = True
-                    self.escape_candidate_time = now
-                    self.log("Candidate +++ escape detected, waiting for post-guard silence...")
+            now = time.time()
+
+            # If we were in candidate state (already got 3 '+') and a character arrived before guard time:
+            if self.escape_candidate:
+                # Sequence broken because post-guard silence was violated!
+                self.log(f"Escape candidate broken by byte {char!r} after {now - self.escape_candidate_time:.3f}s (needed {GUARD_TIME}s)")
+                self.escape_candidate = False
+                self.forward_to_socket(bytes(self.escape_buf))
+                self.escape_buf.clear()
+                self.last_char_time = now
+                self.forward_to_socket(char)
                 continue
 
-            # Non-escape byte or interrupted sequence
+            if char == b'+':
+                if len(self.escape_buf) == 0:
+                    # First '+' requires pre-guard silence
+                    if (now - self.last_char_time) >= GUARD_TIME:
+                        self.escape_buf.append(b)
+                        self.last_char_time = now
+                        continue
+                    else:
+                        # Insufficient silence before '+'
+                        self.last_char_time = now
+                        self.forward_to_socket(char)
+                        continue
+                elif len(self.escape_buf) < 3:
+                    # Subsequent '+' characters: must arrive within 1.0s of previous '+'
+                    if (now - self.last_char_time) < 1.0:
+                        self.escape_buf.append(b)
+                        self.last_char_time = now
+                        if len(self.escape_buf) == 3:
+                            self.escape_candidate = True
+                            self.escape_candidate_time = now
+                            self.log("Candidate +++ escape detected, waiting for post-guard silence...")
+                        continue
+                    else:
+                        # Too much delay between pluses: sequence broken
+                        self.forward_to_socket(bytes(self.escape_buf))
+                        self.escape_buf.clear()
+                        # This new '+' starts a new sequence if silence was >= GUARD_TIME
+                        self.escape_buf.append(b)
+                        self.last_char_time = now
+                        continue
+
+            # Non-'+' byte
             if self.escape_buf:
-                # Sequence broken before reaching 3 '+' or extra chars arrived
                 self.forward_to_socket(bytes(self.escape_buf))
                 self.escape_buf.clear()
                 self.escape_candidate = False
 
-            silence_before = False
+            self.last_char_time = now
             self.forward_to_socket(char)
 
     def check_escape_timeout(self):
-        if self.mode == MODE_STREAM and self.escape_candidate:
-            now = time.time()
-            if (now - self.escape_candidate_time) >= 1.0:
-                # Post-guard silence verified! Transition back to command mode
-                self.log("+++ Escape sequence verified! Dropping to AT command mode.")
-                self.mode = MODE_COMMAND
-                self.escape_buf.clear()
-                self.escape_candidate = False
-                # Do NOT emit OK on escape; wait for next AT command
+        now = time.time()
+        if self.mode == MODE_STREAM:
+            if self.escape_candidate:
+                if (now - self.escape_candidate_time) >= 0.9:
+                    # Post-guard silence verified! Transition back to command mode
+                    self.log("+++ Escape sequence verified! Dropping to AT command mode.")
+                    self.mode = MODE_COMMAND
+                    self.escape_buf.clear()
+                    self.escape_candidate = False
+                    # Do NOT emit OK on escape; wait for next AT command
+            elif self.escape_buf and len(self.escape_buf) < 3:
+                # Incomplete sequence timed out without reaching 3 pluses
+                if (now - self.last_char_time) >= 0.9:
+                    self.forward_to_socket(bytes(self.escape_buf))
+                    self.escape_buf.clear()
 
     def forward_to_socket(self, data: bytes):
         if self.tcp_sock:

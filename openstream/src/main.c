@@ -9,217 +9,10 @@
  * link ready for the operating system loader (e.g. OSboot.bin).
  */
 
+#include "esp8266.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdint.h>
-#include <stdarg.h>
-#include <ctype.h>
-#include <agon/mos.h>
-
-#define BUFFER_SIZE 128
-
-// MOS sysvar_time is at offset 0x00 and ticks in centiseconds (10ms intervals)
-// Note: sysvar_time is incremented by 2 every VBLANK (100 centiseconds per second).
-static volatile uint8_t *sysvars = NULL;
-
-static inline uint24_t get_ticks(void) {
-    return *(volatile uint24_t *)(sysvars + 0x00);
-}
-
-// Convert milliseconds to MOS centisecond ticks (rounding up)
-#define MS_TO_TICKS(ms) (((uint24_t)(ms) + 9) / 10)
-
-// Writes character directly to eZ80 debug port 0x30 (echoed to host stdout by emulator)
-static void debug_putc(char c) {
-    __asm__ volatile (
-        "out0 (0x30), a\n\t"
-        :
-        : "a" (c)
-    );
-}
-
-static void debug_print(const char *s) {
-    while (*s) {
-        debug_putc(*s++);
-    }
-}
-
-static void log_msg(const char *fmt, ...) {
-    char buf[BUFFER_SIZE];
-    va_list args;
-
-    va_start(args, fmt);
-    vsnprintf(buf, sizeof(buf), fmt, args);
-    va_end(args);
-
-    printf("%s", buf);
-    debug_print(buf);
-}
-
-static void wait_ms(uint24_t ms) {
-    uint24_t ticks = MS_TO_TICKS(ms);
-    uint24_t start = get_ticks();
-    while ((uint24_t)(get_ticks() - start) < ticks) {
-        // busy wait on system timer
-    }
-}
-
-static void send_esp(const char *cmd) {
-    while (*cmd) {
-        mos_uputc(*cmd++);
-    }
-}
-
-// Drain UART1 until a continuous 50ms silence interval occurs
-static void flush_uart(void) {
-    uint24_t start = get_ticks();
-    while ((uint24_t)(get_ticks() - start) < MS_TO_TICKS(50)) {
-        if (mos_ugetc_nb() >= 0) {
-            start = get_ticks();
-        }
-    }
-}
-
-// Scans UART1 for expected response, prompt character, or error with timeout.
-// Returns 1 on success, 0 on failure/error, -1 on timeout.
-static int wait_for_response(const char *success_token, int exact_match,
-                             char prompt_char, int check_closed, uint24_t timeout_ms) {
-    uint24_t timeout_ticks = MS_TO_TICKS(timeout_ms);
-    uint24_t start_tick = get_ticks();
-    char line[BUFFER_SIZE];
-    uint8_t len = 0;
-
-    while ((uint24_t)(get_ticks() - start_tick) < timeout_ticks) {
-        int c = mos_ugetc_nb();
-        if (c < 0) {
-            continue;
-        }
-
-        // Check for immediate un-delimited prompt character (e.g. '>')
-        if (prompt_char && c == prompt_char) {
-            return 1;
-        }
-
-        switch (c) {
-        case '\r':
-            break;
-
-        case '\n':
-            if (len == 0) {
-                break;
-            }
-            line[len] = '\0';
-            len = 0;
-
-            // Check failure conditions first
-            if (strstr(line, "FAIL") != NULL || strstr(line, "ERROR") != NULL) {
-                return 0;
-            }
-            if (check_closed && strstr(line, "CLOSED") != NULL) {
-                return 0;
-            }
-
-            // Check success condition
-            if (success_token) {
-                if (exact_match ? (strcmp(line, success_token) == 0)
-                                : (strstr(line, success_token) != NULL)) {
-                    return 1;
-                }
-            }
-            break;
-
-        default:
-            if (len < (BUFFER_SIZE - 1)) {
-                line[len++] = (char)toupper(c);
-            }
-            break;
-        }
-    }
-    return -1; // timeout
-}
-
-// Scans UART1 for "OK" (returns 1), "ERROR"/"FAIL" (returns 0), or timeout (returns -1)
-static inline int wait_for_ok(uint24_t timeout_ms) {
-    return wait_for_response("OK", 1, 0, 0, timeout_ms);
-}
-
-// Scans UART1 for TCP connection result:
-// Returns 1 on success (CONNECT or ALREADY CONNECTED)
-// Returns 0 on failure (CONNECT FAIL, CLOSED, ERROR, DNS Fail)
-// Returns -1 on timeout
-static inline int wait_for_connect(uint24_t timeout_ms) {
-    return wait_for_response("CONNECT", 0, 0, 1, timeout_ms);
-}
-
-// Scans UART1 for '>' prompt from AT+CIPSEND (returns 1), "ERROR"/"FAIL" (returns 0), or timeout (returns -1)
-static inline int wait_for_prompt(uint24_t timeout_ms) {
-    return wait_for_response(NULL, 0, '>', 0, timeout_ms);
-}
-
-static void escape_stream_mode(void) {
-    // 1.1s pre-guard silence (110 centiseconds)
-    wait_ms(1100);
-    flush_uart();
-    // Raw +++ escape string without CRLF
-    send_esp("+++");
-    // 1.1s post-guard silence (110 centiseconds)
-    wait_ms(1100);
-    flush_uart();
-}
-
-static int prepare_esp(void) {
-    flush_uart();
-
-    // 1. Probe if module is in AT command mode
-    send_esp("AT\r\n");
-    if (wait_for_ok(500) != 1) {
-        log_msg("Notice: Module not responding. Attempting stream escape...\n");
-        escape_stream_mode();
-        send_esp("AT\r\n");
-        if (wait_for_ok(1500) != 1) {
-            log_msg("Error: ESP8266 module not responding on UART1 (115200 baud).\n");
-            return 0;
-        }
-        log_msg("Notice: Recovered module to command mode.\n");
-    }
-
-    // 2. Disable local character echo
-    send_esp("ATE0\r\n");
-    wait_for_ok(500);
-    flush_uart();
-
-    // 3. Close any active connection to prevent "link is builded" error on CIPMUX change
-    send_esp("AT+CIPCLOSE\r\n");
-    wait_for_ok(500); // Discard response (OK or ERROR)
-    flush_uart();
-
-    // 4. Reset to non-transparent mode first
-    send_esp("AT+CIPMODE=0\r\n");
-    if (wait_for_ok(500) != 1) {
-        log_msg("Error: Failed to reset CIPMODE=0.\n");
-        return 0;
-    }
-    flush_uart();
-
-    // 5. Configure single-connection mode (required for transparent streaming)
-    send_esp("AT+CIPMUX=0\r\n");
-    if (wait_for_ok(1000) != 1) {
-        log_msg("Error: Failed to set single-connection mode (CIPMUX=0).\n");
-        return 0;
-    }
-    flush_uart();
-
-    // 6. Enable transparent transmission mode
-    send_esp("AT+CIPMODE=1\r\n");
-    if (wait_for_ok(1000) != 1) {
-        log_msg("Error: Failed to enable transparent mode (CIPMODE=1).\n");
-        return 0;
-    }
-    flush_uart();
-
-    return 1;
-}
 
 static int usage(void) {
     log_msg("Usage: openstream <host_or_ip> <port>\n"
@@ -248,6 +41,30 @@ static uint16_t parse_port(const char *s) {
     return (uint16_t)port;
 }
 
+static int prepare_esp(void) {
+    if (!restore_command_mode()) {
+        return 0;
+    }
+
+    // Configure single-connection mode (required for transparent streaming)
+    send_esp("AT+CIPMUX=0\r\n");
+    if (wait_for_ok(1000) != 1) {
+        log_msg("Error: Failed to set single-connection mode (CIPMUX=0).\n");
+        return 0;
+    }
+    flush_uart();
+
+    // Enable transparent transmission mode
+    send_esp("AT+CIPMODE=1\r\n");
+    if (wait_for_ok(1000) != 1) {
+        log_msg("Error: Failed to enable transparent mode (CIPMODE=1).\n");
+        return 0;
+    }
+    flush_uart();
+
+    return 1;
+}
+
 int main(int argc, char *argv[]) {
     uint16_t port;
     if (argc < 3 || (port = parse_port(argv[2])) == 0) {
@@ -258,17 +75,7 @@ int main(int argc, char *argv[]) {
     strncpy(host, argv[1], sizeof(host) - 1);
     host[sizeof(host) - 1] = '\0';
 
-    sysvars = (volatile uint8_t *)mos_sysvars();
-
-    UART settings;
-    settings.baudRate = 115200;
-    settings.dataBits = 8;
-    settings.stopBits = 1;
-    settings.parity = 0;
-    settings.flowcontrol = 0;
-    settings.eir = 0;
-
-    if (mos_uopen(&settings) != 0) {
+    if (!init_uart1()) {
         log_msg("Error: Failed to open UART1 (interface locked).\n");
         return 1;
     }
@@ -280,13 +87,13 @@ int main(int argc, char *argv[]) {
     }
 
     char cmd[BUFFER_SIZE];
-    snprintf(cmd, sizeof(cmd), "AT+CIPSTART=\"TCP\",\"%s\",%d\r\n", host, port);
-    log_msg("Connecting to %s:%d...\n", host, port);
+    snprintf(cmd, sizeof(cmd), "AT+CIPSTART=\"TCP\",\"%s\",%u\r\n", host, port);
+    log_msg("Connecting to %s:%u...\n", host, port);
     send_esp(cmd);
 
     int conn_res = wait_for_connect(10000);
     if (conn_res <= 0) {
-        log_msg("Error: Connection to %s:%d failed.\n", host, port);
+        log_msg("Error: Connection to %s:%u failed.\n", host, port);
         send_esp("AT+CIPCLOSE\r\n");
         wait_for_ok(500);
         send_esp("AT+CIPMODE=0\r\n");

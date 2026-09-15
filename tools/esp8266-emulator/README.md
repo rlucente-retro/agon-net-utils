@@ -17,8 +17,10 @@ This toolkit provides a complete virtual ESP8266 network coprocessor environment
 
 | File | Role | Description |
 | :--- | :--- | :--- |
-| [`test_integration.py`](test_integration.py) | **Automated Test Runner** | All-in-one test script that boots `mock_server.py`, `esp8266_sim.py`, and `fab-agon-emulator`, verifies AT negotiation and TCP streaming, tests bidirectional payloads (`@ping` -> `@pong`), and restores SD card configuration. |
-| [`esp8266_sim.py`](esp8266_sim.py) | **Coprocessor Simulator** | Creates a virtual serial PTY, implements the Espressif ESP-AT v1.7.x firmware command set, manages transparent streaming mode (`CIPMODE=1`), proxies raw data over real TCP sockets, and detects Hayes `+++` escape sequences. |
+| File | Role | Description |
+| :--- | :--- | :--- |
+| [`test_integration.py`](test_integration.py) | **Automated Test Suite** | Two-stage automated test script that boots `mock_server.py`, `esp8266_sim.py`, and `fab-agon-emulator`, verifies AT negotiation and bidirectional TCP streaming for `openstream` (Stage 1), validates Hayes `+++` escape, socket teardown, and mode reset for `closestream` (Stage 2), and restores SD card configuration. |
+| [`esp8266_sim.py`](esp8266_sim.py) | **Coprocessor Simulator** | Creates a virtual serial PTY, implements the Espressif ESP-AT v1.7.x firmware command set, manages transparent streaming mode (`CIPMODE=1`), proxies raw data over real TCP sockets, and detects Hayes `+++` escape sequences with guard silences. |
 | [`mock_server.py`](mock_server.py) | **Test TCP Server** | Lightweight test server that listens on port 65432, remaining completely silent until the client sends `@ping\n`, and responds with `@pong\n`. |
 | [`run_emulator.sh`](run_emulator.sh) | **Interactive Launcher** | Starts `esp8266_sim.py` and automatically launches `fab-agon-emulator` linked to the simulated PTY. |
 
@@ -27,46 +29,53 @@ This toolkit provides a complete virtual ESP8266 network coprocessor environment
 ## Architecture
 
 ```
-+-------------------------------------------------+
-|               Fab Agon Emulator                 |
-|       (eZ80 UART1: openstream.bin / OS)         |
-+------------------------+------------------------+
-                         |
-        Virtual PTY: /dev/ttys00X (or /tmp/agon-uart1)
-                         |
-                         v
-+------------------------+------------------------+
-|                 esp8266_sim.py                  |
-|  - Espressif ESP-AT v1.7.4.0 command engine     |
-|  - Transparent streaming proxy (CIPMODE=1)      |
-|  - Hayes '+++' escape detector (1.0s guards)    |
-+------------------------+------------------------+
-                         |
-                 Host TCP Socket
-                         |
-                         v
-+------------------------+------------------------+
-|             Remote Server Host                  |
-|        (mock_server.py or TRS-NET.py)           |
-+-------------------------------------------------+
++----------------------------------------------------+
+|                Fab Agon Emulator                   |
+|       (eZ80 UART1: openstream / closestream / OS)  |
++-------------------------+--------------------------+
+                          |
+         Virtual PTY: /dev/ttys00X (or /tmp/agon-uart1)
+                          |
+                          v
++-------------------------+--------------------------+
+|                  esp8266_sim.py                    |
+|  - Espressif ESP-AT v1.7.4.0 command engine        |
+|  - Transparent streaming proxy (CIPMODE=1)         |
+|  - Hayes '+++' escape detector (0.9s guard silence)|
++-------------------------+--------------------------+
+                          |
+                   Host TCP Socket
+                          |
+                          v
++-------------------------+--------------------------+
+|              Remote Server Host                    |
+|         (mock_server.py or TRS-NET.py)             |
++----------------------------------------------------+
 ```
 
 ---
 
-## Method 1: Automated Integration Test (Recommended)
+## Method 1: Automated Integration Test Suite (Recommended)
 
-An end-to-end automated test script is provided in [`test_integration.py`](test_integration.py). It handles the full lifecycle automatically:
+An end-to-end automated test runner is provided in [`test_integration.py`](test_integration.py). It validates both utilities across two automated stages:
 
-1. Backs up the emulator's `sdcard/autoexec.txt`.
-2. Installs the latest `openstream.bin` to `sdcard/mos/openstream.bin`.
-3. Configures `autoexec.txt` to invoke `openstream.bin 127.0.0.1 65432`.
-4. Starts `mock_server.py` in the background.
-5. Starts `esp8266_sim.py` with PTY symlink `/tmp/agon-uart1`.
-6. Launches `fab-agon-emulator` connected to the virtual PTY.
-7. Verifies the AT command sequence (`AT`, `ATE0`, `AT+CIPCLOSE`, `AT+CIPMODE=0`, `AT+CIPMUX=0`, `AT+CIPMODE=1`, `AT+CIPSTART`, `AT+CIPSEND`).
-8. Verifies socket connection on `mock_server.py`.
-9. Transmits `@ping\n` through the transparent stream and validates `@pong\n` response.
-10. Shuts down processes and restores the original `autoexec.txt`.
+### Stage 1: `openstream` & Transparent Data Streaming
+1. Installs the latest `openstream.bin` to `sdcard/mos/openstream.bin`.
+2. Boots `mock_server.py` and `esp8266_sim.py`.
+3. Launches `fab-agon-emulator` with `autoexec.txt` invoking `openstream.bin 127.0.0.1 65432`.
+4. Validates the AT command sequence (`AT`, `ATE0`, `AT+CIPCLOSE`, `AT+CIPMODE=0`, `AT+CIPMUX=0`, `AT+CIPMODE=1`, `AT+CIPSTART`, `AT+CIPSEND`).
+5. Validates incoming TCP connection on `mock_server.py`.
+6. Transmits `@ping\n` through the transparent stream and validates `@pong\n` response.
+
+### Stage 2: `closestream` Escape & Teardown
+1. Installs the latest `closestream.bin` to `sdcard/mos/closestream.bin`.
+2. Configures `autoexec.txt` to invoke `openstream.bin` followed immediately by `closestream.bin`.
+3. Launches `fab-agon-emulator`.
+4. Validates that `closestream` detects non-responsive stream mode and issues the Hayes `+++` escape code.
+5. Validates that `esp8266_sim.py` enforces guard silences and drops back to AT command mode.
+6. Validates `AT+CIPCLOSE` socket teardown and disconnection at `mock_server.py`.
+7. Validates `AT+CIPMODE=0` mode reset and clean MOS completion.
+8. Restores the emulator's original `autoexec.txt`.
 
 ### Running the Automated Test
 
@@ -84,11 +93,15 @@ Optional arguments:
 
 ```text
 ============================================================
-  openstream & ESP8266 Simulator Integration Test
+  openstream & closestream Integration Test Suite
 ============================================================
 Emulator Binary: /path/to/fab-agon-emulator
 TCP Port:        65432
 SDCard Dir:      /path/to/fab-agon-emulator/sdcard
+------------------------------------------------------------
+
+------------------------------------------------------------
+  STAGE 1: openstream & Bidirectional Stream Verification
 ------------------------------------------------------------
 [*] Starting Mock TCP Server...
 [*] Starting MOD-WIFI-ESP8266 Simulator (PTY: /tmp/agon-uart1)...
@@ -96,15 +109,30 @@ SDCard Dir:      /path/to/fab-agon-emulator/sdcard
 [*] Waiting for openstream AT handshake and TCP connection...
 [*] Testing bidirectional stream payload (@ping -> @pong)...
 [+] Successfully received reply over UART1 stream: b'pong\n'
-[*] Terminating emulator and test services...
+[*] Stage 1 AT Negotiation:     PASS
+[*] Stage 1 Socket Connection:  PASS
+[*] Stage 1 openstream Output:  PASS
+[*] Stage 1 Payload Streaming:  PASS
+
+------------------------------------------------------------
+  STAGE 2: closestream Escape & Teardown Verification
+------------------------------------------------------------
+[*] Starting Mock TCP Server...
+[*] Starting MOD-WIFI-ESP8266 Simulator (PTY: /tmp/agon-uart1)...
+[*] Launching Fab Agon Emulator (--uart1-baud 0)...
+[*] Waiting for openstream + closestream execution...
+[*] Stage 2 Hayes Escape (+++): PASS
+[*] Stage 2 Socket Disconnect:  PASS
+[*] Stage 2 CIPMODE=0 Reset:    PASS
+[*] Stage 2 closestream Output: PASS
+
 [+] Restored original autoexec.txt.
-------------------------------------------------------------
-                    TEST SUMMARY
-------------------------------------------------------------
-[*] AT Command Negotiation:    PASS
-[*] TCP Socket Connection:      PASS
-[*] MOS openstream Execution:   PASS
-[*] Transparent Data Streaming: PASS
+
+============================================================
+                    OVERALL TEST SUMMARY
+============================================================
+[*] Stage 1 (openstream & streaming):  PASS
+[*] Stage 2 (closestream & teardown):  PASS
 ============================================================
 [+] ALL INTEGRATION TESTS PASSED SUCCESSFULLY!
 ```
@@ -115,14 +143,14 @@ SDCard Dir:      /path/to/fab-agon-emulator/sdcard
 
 For interactive testing in the emulator window with manual MOS commands:
 
-### Step 1: Build & Copy `openstream.bin`
+### Step 1: Build & Copy Binaries
 
-Compile `openstream.bin` and copy it to the emulator's `sdcard/mos/` folder:
+Compile all utilities and copy them to the emulator's `sdcard/mos/` folder:
 
 ```bash
-cd openstream
 make clean && make
-cp bin/openstream.bin /path/to/fab-agon-emulator/sdcard/mos/
+cp openstream/bin/openstream.bin /path/to/fab-agon-emulator/sdcard/mos/
+cp closestream/bin/closestream.bin /path/to/fab-agon-emulator/sdcard/mos/
 ```
 
 ### Step 2: Start Mock Server (Terminal 1)
@@ -190,6 +218,38 @@ In the **Mock Server Terminal (Terminal 1)**:
 ```text
 [+] Client connected from 127.0.0.1:61631
 [*] Silent mode: Waiting for client '@ping'...
+```
+
+### Step 6: Teardown Link with `closestream`
+
+In the emulator window:
+
+```text
+closestream
+```
+
+In the **Emulator Window**:
+```text
+Closing stream and restoring ESP8266 command mode...
+Notice: Module not responding. Attempting stream escape...
+Notice: Recovered module to command mode.
+Stream closed. ESP8266 in command mode.
+```
+
+In the **Simulator Terminal (Terminal 2)**:
+```text
+Candidate +++ escape detected, waiting for post-guard silence...
++++ Escape sequence verified! Dropping to AT command mode.
+AT CMD: 'AT'
+AT CMD: 'ATE0'
+AT CMD: 'AT+CIPCLOSE'
+TCP socket closed
+AT CMD: 'AT+CIPMODE=0'
+```
+
+In the **Mock Server Terminal (Terminal 1)**:
+```text
+[-] Client 127.0.0.1:61631 disconnected.
 ```
 
 ---
