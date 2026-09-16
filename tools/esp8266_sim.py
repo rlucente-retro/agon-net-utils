@@ -2,8 +2,8 @@
 """
 MOD-WIFI-ESP8266 Coprocessor Simulator for Fab Agon Emulator
 
-Emulates the Espressif ESP-AT v1.7.x firmware running on an Olimex MOD-WIFI-ESP8266
-module connected to UART1 of the Olimex Agon Light 2.
+Emulates the Espressif ESP-AT v1.7.x firmware running on a MOD-WIFI-ESP8266
+module connected to UART1 of the Agon family (Agon Light, Agon Light 2, etc.).
 
 Creates a virtual serial pseudo-terminal (PTY) that can be linked to:
     fab-agon-emulator --uart1-device <pty_path> --uart1-baud 0
@@ -483,7 +483,7 @@ class ESP8266Simulator:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="MOD-WIFI-ESP8266 Coprocessor Simulator for Agon Light 2")
+    parser = argparse.ArgumentParser(description="MOD-WIFI-ESP8266 Coprocessor Simulator for Agon family")
     parser.add_argument("--symlink", default=str(DEFAULT_SYMLINK), help="Symlink path for PTY (default: /tmp/agon-uart1)")
     parser.add_argument("--ip", default=DEFAULT_IP, help="Simulated local IP address")
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose debug logging")
