@@ -300,6 +300,9 @@ class ESP8266Simulator:
             self.tcp_port = port
             self.log(f"TCP connection established to {host}:{port}")
             self.send_response("\r\nCONNECT\r\n\r\nOK\r\n")
+        except socket.gaierror as e:
+            self.log(f"DNS lookup failed for '{host}': {e}")
+            self.send_response("\r\nDNS Fail\r\n\r\nERROR\r\n")
         except OSError as e:
             self.log(f"TCP connection failed: {e}")
             self.send_response("\r\nCLOSED\r\n\r\nCONNECT FAIL\r\n\r\nERROR\r\n")
