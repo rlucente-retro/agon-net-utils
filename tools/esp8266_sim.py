@@ -71,6 +71,22 @@ class ESP8266Simulator:
         self.tcp_host: str | None = None
         self.tcp_port: int | None = None
 
+        # UART configuration: <baudrate>, <databits>, <stopbits>, <parity>, <flow_control>
+        self.uart_cur = {
+            "baudrate": 115200,
+            "databits": 8,
+            "stopbits": 1,
+            "parity": 0,
+            "flow_control": 0,
+        }
+        self.uart_def = {
+            "baudrate": 115200,
+            "databits": 8,
+            "stopbits": 1,
+            "parity": 0,
+            "flow_control": 0,
+        }
+
         # Command buffer
         self.cmd_buffer = bytearray()
         self.last_was_cr = False
@@ -168,6 +184,23 @@ class ESP8266Simulator:
             self.close_socket()
             self.mode = OperatingMode.COMMAND
             self.cipmode = 0
+            self.uart_cur = dict(self.uart_def)
+            self.send_response("\r\nOK\r\nready\r\n")
+
+        elif u_cmd.startswith("AT+RESTORE"):
+            self.close_socket()
+            self.mode = OperatingMode.COMMAND
+            self.cipmode = 0
+            self.cipmux = 0
+            self.cwmode = 1
+            self.uart_def = {
+                "baudrate": 115200,
+                "databits": 8,
+                "stopbits": 1,
+                "parity": 0,
+                "flow_control": 0,
+            }
+            self.uart_cur = dict(self.uart_def)
             self.send_response("\r\nOK\r\nready\r\n")
 
         elif u_cmd.startswith("AT+CWMODE"):
@@ -262,9 +295,112 @@ class ESP8266Simulator:
             except OSError:
                 self.send_response("\r\nDNS Fail\r\n\r\nERROR\r\n")
 
+        elif (
+            u_cmd.startswith("AT+UART_CUR")
+            or u_cmd.startswith("AT+UART_DEF")
+            or u_cmd.startswith("AT+UART")
+            or u_cmd.startswith("AT+CIOBAUD")
+        ):
+            self.handle_uart_cmd(cmd, u_cmd)
+
         else:
             self.log(f"Unhandled command '{cmd}', returning OK")
             self.send_response("\r\nOK\r\n")
+
+    def handle_uart_cmd(self, cmd: str, u_cmd: str) -> None:
+        """Handle AT+UART_CUR, AT+UART_DEF, AT+UART, and legacy AT+CIOBAUD commands."""
+        # Check for legacy AT+CIOBAUD
+        if u_cmd.startswith("AT+CIOBAUD"):
+            if "?" in u_cmd:
+                self.send_response(f"\r\n+CIOBAUD:{self.uart_cur['baudrate']}\r\n\r\nOK\r\n")
+            elif "=" in cmd:
+                try:
+                    baud = int(cmd.partition("=")[2].strip())
+                    if baud <= 0:
+                        raise ValueError
+                    self.uart_cur["baudrate"] = baud
+                    self.send_response("\r\nOK\r\n")
+                except ValueError:
+                    self.send_response("\r\nERROR\r\n")
+            else:
+                self.send_response("\r\nERROR\r\n")
+            return
+
+        # Determine target command prefix: AT+UART_DEF, AT+UART_CUR, or legacy AT+UART
+        is_def = u_cmd.startswith("AT+UART_DEF")
+        is_cur = u_cmd.startswith("AT+UART_CUR")
+        tag = "+UART_DEF" if is_def else ("+UART_CUR" if is_cur else "+UART")
+
+        # Test command: AT+UART...=?
+        if "=?" in u_cmd:
+            self.send_response("\r\nOK\r\n")
+            return
+
+        # Query command: AT+UART...?
+        if "?" in u_cmd:
+            cfg = self.uart_def if is_def else self.uart_cur
+            resp = (
+                f"\r\n{tag}:{cfg['baudrate']},{cfg['databits']},"
+                f"{cfg['stopbits']},{cfg['parity']},{cfg['flow_control']}\r\n\r\nOK\r\n"
+            )
+            self.send_response(resp)
+            return
+
+        # Set command: AT+UART...=<baudrate>,<databits>,<stopbits>,<parity>,<flow_control>
+        if "=" in cmd:
+            params_str = cmd.partition("=")[2].strip()
+            parts = [p.strip() for p in params_str.split(",")]
+            if len(parts) != 5:
+                self.send_response("\r\nERROR\r\n")
+                return
+
+            try:
+                baud = int(parts[0])
+                databits = int(parts[1])
+                stopbits = int(parts[2])
+                parity = int(parts[3])
+                flow = int(parts[4])
+            except ValueError:
+                self.send_response("\r\nERROR\r\n")
+                return
+
+            # Validate parameters according to Espressif ESP8266 AT specification:
+            # baudrate: positive integer (typically 110 to 5000000)
+            # databits: 5 (5-bit), 6 (6-bit), 7 (7-bit), 8 (8-bit)
+            # stopbits: 1 (1-bit), 2 (1.5-bit), 3 (2-bit)
+            # parity: 0 (None), 1 (Odd), 2 (Even)
+            # flow_control: 0 (Disabled), 1 (RTS), 2 (CTS), 3 (RTS & CTS)
+            if (
+                baud <= 0
+                or databits not in (5, 6, 7, 8)
+                or stopbits not in (1, 2, 3)
+                or parity not in (0, 1, 2)
+                or flow not in (0, 1, 2, 3)
+            ):
+                self.send_response("\r\nERROR\r\n")
+                return
+
+            new_cfg = {
+                "baudrate": baud,
+                "databits": databits,
+                "stopbits": stopbits,
+                "parity": parity,
+                "flow_control": flow,
+            }
+
+            if is_def:
+                self.uart_def = new_cfg
+                self.uart_cur = dict(new_cfg)
+                self.log(f"UART_DEF configured: {baud},{databits},{stopbits},{parity},{flow}")
+            else:
+                self.uart_cur = new_cfg
+                self.log(f"UART_CUR configured: {baud},{databits},{stopbits},{parity},{flow}")
+
+            self.send_response("\r\nOK\r\n")
+            return
+
+        # Malformed command (neither '?' nor '=')
+        self.send_response("\r\nERROR\r\n")
 
     def handle_cipstart(self, cmd: str) -> None:
         if self.tcp_sock:
